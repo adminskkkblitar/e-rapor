@@ -1,0 +1,460 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>E-Rapor Kurikulum Deep Learning & 8 Dimensi - SD Kristen Kalam Kudus Blitar</title>
+  <!-- Tailwind CSS CDN untuk Google Apps Script Standalone Web App / Cloudflare -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Merriweather:wght@400;700&display=swap" rel="stylesheet">
+  
+  <style>
+    body {
+      font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
+    }
+
+    /* CSS PRINT STANDAR RESMI A4 PORTRAIT */
+    @media print {
+      @page {
+        size: A4 portrait;
+        margin: 1.5cm;
+      }
+
+      body {
+        background-color: #ffffff !important;
+        color: #000000 !important;
+        font-size: 11pt;
+        line-height: 1.35;
+        -webkit-print-color-adjust: exact !important;
+        print-color-adjust: exact !important;
+      }
+
+      .no-print {
+        display: none !important;
+      }
+
+      .print-page {
+        width: 100% !important;
+        margin: 0 !important;
+        padding: 0 !important;
+        border: none !important;
+        box-shadow: none !important;
+      }
+
+      table, tr, td, th, .avoid-break {
+        page-break-inside: avoid !important;
+        break-inside: avoid !important;
+      }
+
+      table {
+        border-collapse: collapse !important;
+        width: 100% !important;
+      }
+
+      th, td {
+        border: 1px solid #111827 !important;
+      }
+    }
+  </style>
+</head>
+<body class="bg-slate-100 text-slate-900 min-h-screen">
+
+  <!-- NAVBAR & KONTROL -->
+  <header class="no-print bg-slate-900 text-white p-4 sticky top-0 z-30 shadow-md">
+    <div class="max-w-6xl mx-auto flex flex-wrap items-center justify-between gap-4">
+      <div>
+        <h1 class="text-base font-bold flex items-center gap-2">
+          E-Rapor Deep Learning & 8 Dimensi
+          <span class="text-xs bg-indigo-600 px-2 py-0.5 rounded-full font-semibold">SD Kristen Kalam Kudus Blitar</span>
+        </h1>
+        <p class="text-xs text-slate-400">Wali Kelas: Petrus Apriprasetyo, S.Pd • Kepala Sekolah: Dian Natalia Widiasih, S.Psi</p>
+      </div>
+
+      <div class="flex items-center gap-2">
+        <button id="btnTabInti" onclick="switchPrintView('inti')" class="px-3 py-1.5 rounded-lg text-xs font-bold bg-indigo-600 text-white">
+          (1) Rapor Inti
+        </button>
+        <button id="btnTabCover" onclick="switchPrintView('cover')" class="px-3 py-1.5 rounded-lg text-xs font-bold bg-slate-800 text-slate-300 hover:text-white">
+          (2) Sampul Depan
+        </button>
+        <button id="btnTabSekolah" onclick="switchPrintView('sekolah')" class="px-3 py-1.5 rounded-lg text-xs font-bold bg-slate-800 text-slate-300 hover:text-white">
+          (3) Identitas Sekolah
+        </button>
+        <button id="btnTabSiswa" onclick="switchPrintView('siswa')" class="px-3 py-1.5 rounded-lg text-xs font-bold bg-slate-800 text-slate-300 hover:text-white">
+          (4) Identitas Siswa
+        </button>
+
+        <select id="selSemester" onchange="onSemesterChange()" class="bg-slate-800 text-xs font-bold text-white border border-slate-700 rounded-lg px-2 py-1.5">
+          <option value="2">Semester 2 (Genap - Kenaikan Aktif)</option>
+          <option value="1">Semester 1 (Ganjil - Kenaikan Nonaktif)</option>
+        </select>
+
+        <button onclick="window.print()" class="px-4 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold rounded-lg flex items-center gap-1.5 shadow-sm">
+          Cetak A4
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- KONTEN CETAK A4 -->
+  <main class="max-w-[210mm] mx-auto p-4 md:p-8">
+    
+    <!-- TAMPILAN 1: RAPOR INTI -->
+    <div id="viewRaporInti" class="print-page bg-white p-8 md:p-12 shadow-lg border border-slate-200 text-xs md:text-sm">
+      
+      <!-- KOP RAPOR -->
+      <div class="border-b-2 border-slate-900 pb-3 mb-4 avoid-break">
+        <div class="flex justify-between items-start">
+          <div>
+            <h2 class="text-base md:text-lg font-extrabold uppercase text-slate-950">LAPORAN HASIL BELAJAR (RAPOR)</h2>
+            <p class="text-xs font-semibold text-slate-700 uppercase">KURIKULUM DEEP LEARNING & 8 DIMENSI PROFIL LULUSAN</p>
+          </div>
+          <div class="text-right">
+            <p class="text-xs font-bold uppercase">SD KRISTEN KALAM KUDUS BLITAR</p>
+            <p class="text-[11px] text-slate-600">Dsn. Tambak, Pagergunung, Kesamben, Blitar</p>
+          </div>
+        </div>
+
+        <div class="mt-3 grid grid-cols-2 md:grid-cols-4 gap-2 text-[11px] bg-slate-50 p-2.5 rounded border border-slate-200">
+          <div>Nama: <strong>ADRY GRACIO SURYAJAYA</strong></div>
+          <div>NISN / NIS: <span class="font-semibold">0158352348 / 230101</span></div>
+          <div>Kelas / Fase: <span class="font-semibold">V / Fase C</span></div>
+          <div>Semester / TP: <span id="lblSemester" class="font-semibold">Semester 2 / 2025-2026</span></div>
+        </div>
+      </div>
+
+      <!-- TABEL A: MAPEL INTRAKURIKULER -->
+      <div class="mb-5 avoid-break">
+        <h3 class="text-xs font-bold uppercase mb-2">A. Nilai Pembelajaran Intrakurikuler</h3>
+        <table class="w-full border-collapse border border-slate-900 text-[11px]">
+          <thead>
+            <tr class="bg-slate-100 font-bold">
+              <th class="border border-slate-900 p-1.5 w-8 text-center">No</th>
+              <th class="border border-slate-900 p-1.5 text-left w-44">Mata Pelajaran</th>
+              <th class="border border-slate-900 p-1.5 w-16 text-center">Rata Formatif</th>
+              <th class="border border-slate-900 p-1.5 w-16 text-center">Rata Sumatif</th>
+              <th class="border border-slate-900 p-1.5 w-14 text-center font-extrabold">Nilai Akhir</th>
+              <th class="border border-slate-900 p-1.5 text-left">Capaian Kompetensi (Deskripsi Max & Min TP)</th>
+            </tr>
+          </thead>
+          <tbody id="tbodyMapel"></tbody>
+        </table>
+      </div>
+
+      <!-- TABEL B: KOKURIKULER 8 DIMENSI -->
+      <div class="mb-5 avoid-break">
+        <h3 class="text-xs font-bold uppercase mb-2">B. Kokurikuler: 8 Dimensi Profil Lulusan</h3>
+        <table class="w-full border-collapse border border-slate-900 text-[11px]">
+          <thead>
+            <tr class="bg-slate-100 font-bold">
+              <th class="border border-slate-900 p-1.5 w-8 text-center">No</th>
+              <th class="border border-slate-900 p-1.5 text-left w-52">Dimensi Profil Lulusan</th>
+              <th class="border border-slate-900 p-1.5 w-20 text-center">Predikat</th>
+              <th class="border border-slate-900 p-1.5 text-left">Catatan Perkembangan Karakter</th>
+            </tr>
+          </thead>
+          <tbody id="tbodyKokurikuler"></tbody>
+        </table>
+      </div>
+
+      <!-- TABEL C: EKSTRAKURIKULER & KEHADIRAN -->
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-5 avoid-break">
+        <div class="md:col-span-2">
+          <h3 class="text-xs font-bold uppercase mb-2">C. Kegiatan Ekstrakurikuler</h3>
+          <table class="w-full border-collapse border border-slate-900 text-[11px]">
+            <thead>
+              <tr class="bg-slate-100 font-bold">
+                <th class="border border-slate-900 p-1.5 w-8 text-center">No</th>
+                <th class="border border-slate-900 p-1.5 text-left">Kegiatan</th>
+                <th class="border border-slate-900 p-1.5 w-20 text-center">Predikat</th>
+                <th class="border border-slate-900 p-1.5 text-left">Keterangan</th>
+              </tr>
+            </thead>
+            <tbody id="tbodyEkstra"></tbody>
+          </table>
+        </div>
+
+        <div>
+          <h3 class="text-xs font-bold uppercase mb-2">D. Ketidakhadiran</h3>
+          <table class="w-full border-collapse border border-slate-900 text-[11px]">
+            <tbody>
+              <tr><td class="border border-slate-900 p-1.5">Sakit</td><td class="border border-slate-900 p-1.5 text-center font-bold">0 hari</td></tr>
+              <tr><td class="border border-slate-900 p-1.5">Izin</td><td class="border border-slate-900 p-1.5 text-center font-bold">1 hari</td></tr>
+              <tr><td class="border border-slate-900 p-1.5">Tanpa Keterangan</td><td class="border border-slate-900 p-1.5 text-center font-bold">0 hari</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- CATATAN WALI KELAS HYBRID -->
+      <div class="mb-5 avoid-break border border-slate-900 p-3 bg-slate-50">
+        <h3 class="text-xs font-bold uppercase mb-1">E. Catatan Wali Kelas</h3>
+        <p class="text-xs italic text-slate-800 leading-relaxed text-justify" id="lblCatatanWaliKelas"></p>
+      </div>
+
+      <!-- STATUS KENAIKAN KELAS (SEMESTER 2 ONLY) -->
+      <div id="boxStatusKenaikan" class="mb-6 avoid-break border-2 border-slate-900 p-3 bg-slate-100 text-center">
+        <h4 class="text-xs font-bold uppercase text-slate-800 mb-1">KEPUTUSAN DEWAN GURU / STATUS KENAIKAN:</h4>
+        <p class="text-sm font-extrabold uppercase tracking-wide">
+          NAIK KE KELAS VI (ENAM)
+        </p>
+      </div>
+
+      <!-- BLOK TANDA TANGAN RESMI SESUAI LAMPIRAN (image_4b62205e.png) -->
+      <div class="avoid-break pt-4 mt-6 border-t border-slate-300 font-sans text-xs md:text-sm">
+        <div class="grid grid-cols-2 gap-8 items-start mb-6">
+          <!-- Sisi Kiri: Orang Tua -->
+          <div class="text-left space-y-12">
+            <div><p class="text-slate-900 font-medium">Orang Tua,</p></div>
+            <div class="pt-2"><p class="text-slate-900 font-medium tracking-widest">................................................</p></div>
+          </div>
+
+          <!-- Sisi Kanan: Titimangsa & Wali Kelas -->
+          <div className="text-right space-y-12" style="text-align: right;">
+            <div>
+              <p class="text-slate-900 font-medium">Blitar, 20 Desember 2025</p>
+              <p class="text-slate-900 font-medium">Wali Kelas</p>
+            </div>
+            <div class="pt-2" style="margin-top: 3rem;">
+              <p class="font-bold text-slate-950">Petrus Apriprasetyo, S.Pd</p>
+              <p class="text-[11px] text-slate-700">NIP. -</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- Sisi Bawah Tengah: Kepala Sekolah -->
+        <div class="flex flex-col items-center justify-center text-center space-y-12 pt-2" style="text-align: center; margin-top: 1rem;">
+          <div>
+            <p class="text-slate-900 font-medium">Mengetahui,</p>
+            <p class="text-slate-900 font-medium">Kepala Sekolah</p>
+          </div>
+          <div class="pt-2" style="margin-top: 3rem;">
+            <p class="font-bold text-slate-950">Dian Natalia Widiasih, S.Psi</p>
+            <p class="text-[11px] text-slate-700">NIP. -</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- TAMPILAN 2: COVER DEPAN (image_0838c2c6.png) -->
+    <div id="viewCoverDepan" class="print-page bg-white p-8 md:p-12 shadow-lg border border-slate-200 min-h-[280mm] hidden font-serif">
+      <div class="border border-black min-h-[260mm] p-8 flex flex-col justify-between items-center text-center">
+        <div class="w-full flex flex-col items-center pt-4">
+          <div class="w-28 h-28 mb-6">
+            <svg viewBox="0 0 200 200" class="w-full h-full">
+              <polygon points="100,10 185,50 160,175 100,195 40,175 15,50" fill="#0284c7" stroke="#0f172a" stroke-width="3" />
+              <polygon points="100,18 177,54 154,168 100,186 46,168 23,54" fill="#38bdf8" stroke="#0284c7" stroke-width="1.5" />
+              <path d="M 50,45 Q 100,28 150,45" fill="none" stroke="#ffffff" stroke-width="14" stroke-linecap="round" />
+              <text x="100" y="43" text-anchor="middle" fill="#0f172a" font-size="9.5" font-weight="bold" letter-spacing="1.2">TUT WURI HANDAYANI</text>
+              <path d="M 100,100 C 60,80 35,115 50,148 C 65,135 80,132 100,140 C 120,132 135,135 150,148 C 165,115 140,80 100,100 Z" fill="#ffffff" stroke="#0f172a" stroke-width="2.5" />
+              <path d="M 100,70 Q 112,85 108,105 Q 100,118 100,118 Q 100,118 92,105 Q 88,85 100,70 Z" fill="#facc15" stroke="#b45309" stroke-width="2" />
+            </svg>
+          </div>
+          <h1 class="text-xl font-bold tracking-[0.35em] mb-1">R A P O R</h1>
+          <h2 class="text-base font-bold tracking-wider mb-1">PESERTA DIDIK</h2>
+          <h2 class="text-base font-bold tracking-wider mb-1">SEKOLAH DASAR</h2>
+          <h3 class="text-base font-bold tracking-wider">(SD)</h3>
+        </div>
+
+        <div class="w-full max-w-lg my-12 space-y-6">
+          <div>
+            <p class="text-sm font-medium mb-2">Nama Peserta Didik :</p>
+            <div class="border-2 border-black py-2.5 px-4"><p class="text-lg font-bold uppercase">ADRY GRACIO SURYAJAYA</p></div>
+          </div>
+          <div>
+            <p class="text-sm font-medium mb-2">NISN</p>
+            <div class="border-2 border-black py-2 px-4"><p class="text-lg font-bold tracking-widest">0158352348</p></div>
+          </div>
+        </div>
+
+        <div class="w-full pb-6 text-center">
+          <p class="text-xs font-bold uppercase">KEMENTERIAN PENDIDIKAN DAN KEBUDAYAAN</p>
+          <p class="text-xs font-bold uppercase">REPUBLIK INDONESIA</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- TAMPILAN 3: IDENTITAS SEKOLAH (image_a4f2202f.png) -->
+    <div id="viewSekolah" class="print-page bg-white p-8 md:p-12 shadow-lg border border-slate-200 min-h-[280mm] hidden font-serif">
+      <div class="border border-black min-h-[260mm] p-10 flex flex-col justify-between">
+        <div class="text-center pt-8 space-y-1">
+          <h1 class="text-xl font-bold tracking-[0.35em]">R A P O R</h1>
+          <h2 class="text-base font-bold tracking-wider">PESERTA DIDIK</h2>
+          <h2 class="text-base font-bold tracking-wider">SEKOLAH DASAR ( SD )</h2>
+        </div>
+
+        <div class="my-12 max-w-xl mx-auto w-full text-xs space-y-2.5">
+          <div class="grid grid-cols-12 gap-1"><span class="col-span-4">Nama Sekolah</span><span class="col-span-1 text-center">:</span><span class="col-span-7 font-bold">SD KRISTEN KALAM KUDUS BLITAR</span></div>
+          <div class="grid grid-cols-12 gap-1"><span class="col-span-4">NPSN</span><span class="col-span-1 text-center">:</span><span class="col-span-7">-</span></div>
+          <div class="grid grid-cols-12 gap-1"><span class="col-span-4">Alamat Sekolah</span><span class="col-span-1 text-center">:</span><span class="col-span-7">Dsn. Tambak</span></div>
+          <div class="grid grid-cols-12 gap-1"><span class="col-span-4">Desa / Kelurahan</span><span class="col-span-1 text-center">:</span><span class="col-span-7">Pagergunung</span></div>
+          <div class="grid grid-cols-12 gap-1"><span class="col-span-4">Kecamatan</span><span class="col-span-1 text-center">:</span><span class="col-span-7">Kesamben</span></div>
+          <div class="grid grid-cols-12 gap-1"><span class="col-span-4">Kabupaten / Kota</span><span class="col-span-1 text-center">:</span><span class="col-span-7">Blitar</span></div>
+          <div class="grid grid-cols-12 gap-1"><span class="col-span-4">Provinsi</span><span class="col-span-1 text-center">:</span><span class="col-span-7">Jawa Timur</span></div>
+        </div>
+
+        <div class="pb-12"></div>
+      </div>
+    </div>
+
+    <!-- TAMPILAN 4: IDENTITAS SISWA (image_ccdca5b7.png) -->
+    <div id="viewSiswa" class="print-page bg-white p-8 md:p-12 shadow-lg border border-slate-200 min-h-[280mm] hidden font-serif">
+      <div class="border border-black min-h-[260mm] p-8 flex flex-col justify-between">
+        <div class="text-center pt-2">
+          <h1 class="text-base font-bold uppercase">IDENTITAS PESERTA DIDIK</h1>
+        </div>
+
+        <div class="my-6 max-w-xl mx-auto w-full text-xs space-y-1.5">
+          <div class="grid grid-cols-12 gap-1"><span class="col-span-4">Nama Peserta Didik</span><span class="col-span-1 text-center">:</span><span class="col-span-7 font-bold uppercase">ADRY GRACIO SURYAJAYA</span></div>
+          <div class="grid grid-cols-12 gap-1"><span class="col-span-4">NISN / NIS</span><span class="col-span-1 text-center">:</span><span class="col-span-7">0158352348</span></div>
+          <div class="grid grid-cols-12 gap-1"><span class="col-span-4">Tempat, Tanggal Lahir</span><span class="col-span-1 text-center">:</span><span class="col-span-7 uppercase">Blitar, 14 Maret 2014</span></div>
+          <div class="grid grid-cols-12 gap-1"><span class="col-span-4">Jenis Kelamin</span><span class="col-span-1 text-center">:</span><span class="col-span-7">L</span></div>
+          <div class="grid grid-cols-12 gap-1"><span class="col-span-4">Agama</span><span class="col-span-1 text-center">:</span><span class="col-span-7 uppercase">Kristen Protestan</span></div>
+          <div class="grid grid-cols-12 gap-1"><span class="col-span-4">Alamat Peserta Didik</span><span class="col-span-1 text-center">:</span><span class="col-span-7 uppercase">Dsn. Tambak, RT 02/RW 03, Pagergunung, Kesamben, Blitar</span></div>
+
+          <div class="pt-2 font-medium">Nama Orang Tua</div>
+          <div class="grid grid-cols-12 gap-1 pl-4"><span class="col-span-4">Ayah</span><span class="col-span-1 text-center">:</span><span class="col-span-7 uppercase">SURYA WIJAYA</span></div>
+          <div class="grid grid-cols-12 gap-1 pl-4"><span class="col-span-4">Ibu</span><span class="col-span-1 text-center">:</span><span class="col-span-7 uppercase">GRACE SANTOSO</span></div>
+
+          <div class="pt-2 font-medium">Pekerjaan Orang Tua</div>
+          <div class="grid grid-cols-12 gap-1 pl-4"><span class="col-span-4">Ayah</span><span class="col-span-1 text-center">:</span><span class="col-span-7 uppercase">WIRASWASTA</span></div>
+          <div class="grid grid-cols-12 gap-1 pl-4"><span class="col-span-4">Ibu</span><span class="col-span-1 text-center">:</span><span class="col-span-7 uppercase">IBU RUMAH TANGGA</span></div>
+
+          <div class="pt-2 font-medium">Alamat Orang Tua</div>
+          <div class="grid grid-cols-12 gap-1 pl-4"><span class="col-span-4">Jalan</span><span class="col-span-1 text-center">:</span><span class="col-span-7 uppercase">Dsn. Tambak RT 02/RW 03</span></div>
+          <div class="grid grid-cols-12 gap-1 pl-4"><span class="col-span-4">Kelurahan/Desa</span><span class="col-span-1 text-center">:</span><span class="col-span-7 uppercase">Pagergunung</span></div>
+          <div class="grid grid-cols-12 gap-1 pl-4"><span class="col-span-4">Kecamatan</span><span class="col-span-1 text-center">:</span><span class="col-span-7 uppercase">Kesamben</span></div>
+          <div class="grid grid-cols-12 gap-1 pl-4"><span class="col-span-4">Kabupaten / Kota</span><span class="col-span-1 text-center">:</span><span class="col-span-7 uppercase">Kab. Blitar</span></div>
+          <div class="grid grid-cols-12 gap-1 pl-4"><span class="col-span-4">Provinsi</span><span class="col-span-1 text-center">:</span><span class="col-span-7 uppercase">Jawa Timur</span></div>
+        </div>
+
+        <div class="pt-4 pb-4 flex items-end justify-between max-w-xl mx-auto w-full text-xs">
+          <div class="w-24 h-32 border border-black flex flex-col items-center justify-center text-center p-2 text-[10px] text-slate-500 bg-slate-50">
+            <span>Foto</span><span>3 x 4 cm</span>
+          </div>
+
+          <div class="text-left w-56 space-y-12">
+            <div><p>Kepala Sekolah,</p></div>
+            <div>
+              <p class="font-bold underline">Dian Natalia Widiasih, S.Psi</p>
+              <p class="text-[11px]">NIP. -</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </main>
+
+  <script>
+    const RAPOR_DATA = {
+      mapel: [
+        { no: 1, nama: "Pendidikan Agama Kristen & Budi Pekerti", rForm: 92, rSum: 94, na: 93, desc: "Menunjukkan penguasaan sangat baik dalam keteladanan hidup Yesus Kristus dan kasih persaudaraan, serta perlu pemantapan dalam tanggung jawab memelihara alam ciptaan Tuhan." },
+        { no: 2, nama: "Pendidikan Pancasila", rForm: 89, rSum: 91, na: 90, desc: "Menunjukkan penguasaan sangat baik dalam penerapan sila-sila Pancasila dalam gotong royong, namun perlu peningkatan dalam musyawarah mufakat." },
+        { no: 3, nama: "Bahasa Indonesia", rForm: 90, rSum: 92, na: 91, desc: "Menunjukkan penguasaan sangat baik dalam menemukan ide pokok teks narasi, namun perlu bimbingan dalam penulisan teks deskriptif dengan ejaan baku." },
+        { no: 4, nama: "Matematika", rForm: 88, rSum: 90, na: 89, desc: "Menunjukkan penguasaan sangat baik dalam operasi hitung pecahan desimal, namun perlu latihan dalam penentuan volume kubus dan balok gabungan." },
+        { no: 5, nama: "Ilmu Pengetahuan Alam & Sosial (IPAS)", rForm: 94, rSum: 95, na: 95, desc: "Menunjukkan penguasaan sangat baik dalam penyelidikan siklus air dan konservasi lingkungan, serta perlu pemantapan dalam rantai makanan ekosistem." },
+        { no: 6, nama: "Seni Budaya & Prakarya", rForm: 87, rSum: 89, na: 88, desc: "Menunjukkan penguasaan sangat baik dalam eksplorasi teknik gradasi warna, namun perlu pemantapan dalam pembuatan kriya anyaman." },
+        { no: 7, nama: "Pendidikan Jasmani, Olahraga & Kesehatan", rForm: 88, rSum: 88, na: 88, desc: "Menunjukkan penguasaan sangat baik dalam variasi lari cepat dan lompat jauh, serta perlu pembiasaan gizi seimbang." },
+        { no: 8, nama: "Bahasa Inggris", rForm: 91, rSum: 93, na: 92, desc: "Menunjukkan penguasaan sangat baik dalam percakapan sederhana kegiatan sehari-hari, namun perlu bimbingan dalam kosakata teks fabel pendek." }
+      ],
+      kokurikuler: [
+        { no: 1, nama: "Keimanan & Ketaqwaan Tuhan YME & Berakhlak Mulia", pred: "SB", catatan: "Sangat aktif mempraktikkan nilai spiritual, kejujuran, dan menjadi teladan bagi rekan sekelas." },
+        { no: 2, nama: "Kewargaan, Kebangsaan & Kebhinekaan Global", pred: "BSH", catatan: "Mampu menunjukkan toleransi beragama dan mencintai budaya nusantara dengan baik." },
+        { no: 3, nama: "Penalaran Kritis & Pemecahan Masalah", pred: "SB", catatan: "Sangat kritis dalam menganalisis informasi dan mengajukan pertanyaan reflektif." },
+        { no: 4, nama: "Kreativitas, Inovasi & Eksplorasi", pred: "BSH", catatan: "Mampu menghasilkan karya dan gagasan alternatif yang orisinal dalam proyek pembelajaran." },
+        { no: 5, nama: "Kolaborasi, Gotong Royong & Empati", pred: "SB", catatan: "Sangat kooperatif dalam kerja kelompok dan tanggap membantu teman yang kesulitan." },
+        { no: 6, nama: "Kemandirian & Regulasi Diri", pred: "BSH", catatan: "Disiplin menyelesaikan tugas mandiri tepat waktu tanpa ketergantungan berlebih." },
+        { no: 7, nama: "Komunikasi Efektif & Literasi Digital", pred: "SB", catatan: "Mampu mempresentasikan gagasan secara runtut, santun, dan percaya diri." },
+        { no: 8, nama: "Kesehatan Fisik, Kebugaran & Karakter Tangguh", pred: "BSH", catatan: "Menjaga kebersihan diri serta menunjukkan daya juang positif dalam mengatasi tantangan." }
+      ],
+      ekstra: [
+        { no: 1, nama: "Praja Muda Karana (Pramuka)", pred: "Sangat Baik", desc: "Sangat aktif, berdedikasi tinggi, dan menunjukkan kecakapan kepemimpinan regu yang unggul." },
+        { no: 2, nama: "Paduan Suara & Musik", pred: "Sangat Baik", desc: "Sangat disiplin berlatih vokal, intonasi merdu, dan kompak dalam ansambel musik gerejawi dan nasional." },
+        { no: 3, nama: "Bulutangkis", pred: "Baik", desc: "Aktif mengikuti latihan teknik pukulan dan menjunjung tinggi sportivitas bertanding." },
+        { no: 4, nama: "Dokter Kecil (UKS)", pred: "Sangat Baik", desc: "Sigap dalam mempromosikan Perilaku Hidup Bersih dan Sehat (PHBS) di lingkungan sekolah." }
+      ],
+      catatanCustom: ""
+    };
+
+    function switchPrintView(tab) {
+      document.getElementById('viewRaporInti').classList.add('hidden');
+      document.getElementById('viewCoverDepan').classList.add('hidden');
+      document.getElementById('viewSekolah').classList.add('hidden');
+      document.getElementById('viewSiswa').classList.add('hidden');
+
+      document.getElementById('btnTabInti').className = 'px-3 py-1.5 rounded-lg text-xs font-bold bg-slate-800 text-slate-300 hover:text-white';
+      document.getElementById('btnTabCover').className = 'px-3 py-1.5 rounded-lg text-xs font-bold bg-slate-800 text-slate-300 hover:text-white';
+      document.getElementById('btnTabSekolah').className = 'px-3 py-1.5 rounded-lg text-xs font-bold bg-slate-800 text-slate-300 hover:text-white';
+      document.getElementById('btnTabSiswa').className = 'px-3 py-1.5 rounded-lg text-xs font-bold bg-slate-800 text-slate-300 hover:text-white';
+
+      if (tab === 'inti') {
+        document.getElementById('viewRaporInti').classList.remove('hidden');
+        document.getElementById('btnTabInti').className = 'px-3 py-1.5 rounded-lg text-xs font-bold bg-indigo-600 text-white';
+      } else if (tab === 'cover') {
+        document.getElementById('viewCoverDepan').classList.remove('hidden');
+        document.getElementById('btnTabCover').className = 'px-3 py-1.5 rounded-lg text-xs font-bold bg-indigo-600 text-white';
+      } else if (tab === 'sekolah') {
+        document.getElementById('viewSekolah').classList.remove('hidden');
+        document.getElementById('btnTabSekolah').className = 'px-3 py-1.5 rounded-lg text-xs font-bold bg-indigo-600 text-white';
+      } else if (tab === 'siswa') {
+        document.getElementById('viewSiswa').classList.remove('hidden');
+        document.getElementById('btnTabSiswa').className = 'px-3 py-1.5 rounded-lg text-xs font-bold bg-indigo-600 text-white';
+      }
+    }
+
+    function onSemesterChange() {
+      const sem = parseInt(document.getElementById('selSemester').value, 10);
+      const boxStatus = document.getElementById('boxStatusKenaikan');
+      document.getElementById('lblSemester').textContent = "Semester " + sem + " / 2025-2026";
+      if (sem === 1) {
+        boxStatus.classList.add('hidden');
+      } else {
+        boxStatus.classList.remove('hidden');
+      }
+    }
+
+    function renderData() {
+      document.getElementById('tbodyMapel').innerHTML = RAPOR_DATA.mapel.map(m => `
+        <tr>
+          <td class="border border-slate-900 p-1.5 text-center font-medium">${m.no}</td>
+          <td class="border border-slate-900 p-1.5 font-bold">${m.nama}</td>
+          <td class="border border-slate-900 p-1.5 text-center font-semibold bg-sky-50/40">${m.rForm}</td>
+          <td class="border border-slate-900 p-1.5 text-center font-semibold bg-indigo-50/40">${m.rSum}</td>
+          <td class="border border-slate-900 p-1.5 text-center font-extrabold bg-amber-50/60">${m.na}</td>
+          <td class="border border-slate-900 p-1.5 leading-relaxed text-justify">${m.desc}</td>
+        </tr>
+      `).join('');
+
+      document.getElementById('tbodyKokurikuler').innerHTML = RAPOR_DATA.kokurikuler.map(k => `
+        <tr>
+          <td class="border border-slate-900 p-1.5 text-center font-medium">${k.no}</td>
+          <td class="border border-slate-900 p-1.5 font-bold">${k.nama}</td>
+          <td class="border border-slate-900 p-1.5 text-center font-extrabold bg-slate-100">${k.pred}</td>
+          <td class="border border-slate-900 p-1.5 text-justify leading-relaxed">${k.catatan}</td>
+        </tr>
+      `).join('');
+
+      document.getElementById('tbodyEkstra').innerHTML = RAPOR_DATA.ekstra.map(e => `
+        <tr>
+          <td class="border border-slate-900 p-1.5 text-center font-medium">${e.no}</td>
+          <td class="border border-slate-900 p-1.5 font-bold">${e.nama}</td>
+          <td class="border border-slate-900 p-1.5 text-center font-semibold">${e.pred}</td>
+          <td class="border border-slate-900 p-1.5">${e.desc}</td>
+        </tr>
+      `).join('');
+
+      let finalNote = RAPOR_DATA.catatanCustom;
+      if (!finalNote || finalNote.trim() === '') {
+        finalNote = "Pertahankan prestasi gemilang, ketekunan belajar, dan keluhuran budi pekertimu. Tetaplah menjadi pribadi yang rendah hati, gemar berbagi kebaikan kepada sesama, serta terus asah potensi diri untuk meraih cita-cita mulia.";
+      }
+      document.getElementById('lblCatatanWaliKelas').textContent = '"' + finalNote + '"';
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+      renderData();
+      onSemesterChange();
+    });
+  </script>
+</body>
+</html>

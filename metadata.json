@@ -1,0 +1,6 @@
+{
+  "name": "E-Rapor Deep Learning & 8 Dimensi",
+  "description": "Sistem Informasi Rapor Berbasis Web Kurikulum Deep Learning dan Kokurikuler 8 Dimensi Profil Lulusan terintegrasi Google Sheets dan Google Apps Script.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
