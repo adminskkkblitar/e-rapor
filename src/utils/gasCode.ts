@@ -531,4 +531,278 @@ function getRaporDataLengkap(nis, semester) {
     semester: Number(semester)
   };
 }
+
+/**
+ * 8. ENDPOINT API: doGet(e) - MEMBACA DATA DARI GOOGLE SHEETS
+ * URL Web App dapat dipanggil langsung dari antarmuka web melalui fetch().
+ * Parameter:
+ * - ?action=test -> Tes koneksi
+ * - ?action=readAll -> Membaca data siswa, kurikulum, dan nilai
+ * - ?action=readSiswa -> Membaca daftar identitas siswa
+ */
+function doGet(e) {
+  try {
+    const params = e && e.parameter ? e.parameter : {};
+    const action = params.action || 'readAll';
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+
+    if (action === 'test') {
+      return jsonResponse({
+        status: 'success',
+        message: 'Koneksi Google Apps Script & Google Sheets Berhasil Terhubung!',
+        sekolah: 'SD KRISTEN KALAM KUDUS BLITAR',
+        spreadsheetId: ss.getId(),
+        timestamp: new Date().toISOString()
+      });
+    }
+
+    // Baca Data Siswa
+    const sheetSiswa = ss.getSheetByName(SHEET_NAMES.DATA_SISWA);
+    const dataSiswaValues = sheetSiswa ? sheetSiswa.getDataRange().getValues() : [];
+    const siswaList = [];
+    for (let i = 1; i < dataSiswaValues.length; i++) {
+      const r = dataSiswaValues[i];
+      if (r[0]) {
+        siswaList.push({
+          nis: String(r[0]),
+          nisn: String(r[1] || ''),
+          nama: String(r[2] || ''),
+          kelas: String(r[3] || 'V'),
+          fase: String(r[4] || 'Fase C (Kelas V)'),
+          tempatLahir: String(r[5] || ''),
+          tanggalLahir: String(r[6] || ''),
+          jenisKelamin: String(r[7] || 'L'),
+          agama: String(r[8] || 'Kristen Protestan'),
+          alamat: String(r[9] || ''),
+          namaAyah: String(r[10] || ''),
+          namaIbu: String(r[11] || ''),
+          pekerjaanAyah: String(r[12] || ''),
+          pekerjaanIbu: String(r[13] || ''),
+          alamatOrtuJalan: String(r[14] || ''),
+          alamatOrtuKelurahan: String(r[15] || ''),
+          alamatOrtuKecamatan: String(r[16] || ''),
+          alamatOrtuKota: String(r[17] || ''),
+          alamatOrtuProvinsi: String(r[18] || ''),
+          namaWali: String(r[19] || '-'),
+          pekerjaanWali: String(r[20] || '-'),
+          alamatWali: String(r[21] || '-')
+        });
+      }
+    }
+
+    if (action === 'readSiswa') {
+      return jsonResponse({ status: 'success', data: siswaList });
+    }
+
+    // Baca Master Kurikulum
+    const sheetKurikulum = ss.getSheetByName(SHEET_NAMES.MASTER_KURIKULUM);
+    const kurikulumValues = sheetKurikulum ? sheetKurikulum.getDataRange().getValues() : [];
+    const kurikulumList = [];
+    for (let i = 1; i < kurikulumValues.length; i++) {
+      const r = kurikulumValues[i];
+      if (r[0]) {
+        const tpNarasi = [];
+        for (let t = 5; t <= 29; t++) {
+          tpNarasi.push(String(r[t] || ''));
+        }
+        kurikulumList.push({
+          kodeMapel: String(r[0]),
+          namaMapel: String(r[1]),
+          kelompok: String(r[2] || 'A'),
+          cp: String(r[3] || ''),
+          atp: String(r[4] || ''),
+          tpNarasi: tpNarasi
+        });
+      }
+    }
+
+    // Baca Nilai Formatif
+    const sheetFormatif = ss.getSheetByName(SHEET_NAMES.NILAI_FORMATIF);
+    const formatifValues = sheetFormatif ? sheetFormatif.getDataRange().getValues() : [];
+    const nilaiFormatifList = [];
+    for (let i = 1; i < formatifValues.length; i++) {
+      const r = formatifValues[i];
+      if (r[0] && r[1]) {
+        const nilaiTp = [];
+        for (let t = 2; t < 27; t++) {
+          nilaiTp.push(Number(r[t]) || 0);
+        }
+        nilaiFormatifList.push({
+          nis: String(r[0]),
+          kodeMapel: String(r[1]),
+          nilaiTp: nilaiTp
+        });
+      }
+    }
+
+    // Baca Nilai Sumatif
+    const sheetSumatif = ss.getSheetByName(SHEET_NAMES.NILAI_SUMATIF);
+    const sumatifValues = sheetSumatif ? sheetSumatif.getDataRange().getValues() : [];
+    const nilaiSumatifList = [];
+    for (let i = 1; i < sumatifValues.length; i++) {
+      const r = sumatifValues[i];
+      if (r[0] && r[1]) {
+        nilaiSumatifList.push({
+          nis: String(r[0]),
+          kodeMapel: String(r[1]),
+          sumatifLm: [Number(r[2]) || 0, Number(r[3]) || 0, Number(r[4]) || 0, Number(r[5]) || 0],
+          sts: Number(r[6]) || 0,
+          sas: Number(r[7]) || 0
+        });
+      }
+    }
+
+    return jsonResponse({
+      status: 'success',
+      timestamp: new Date().toISOString(),
+      data: {
+        siswaList: siswaList,
+        kurikulum: kurikulumList,
+        nilaiFormatif: nilaiFormatifList,
+        nilaiSumatif: nilaiSumatifList
+      }
+    });
+
+  } catch (err) {
+    return jsonResponse({
+      status: 'error',
+      message: 'Gagal membaca data dari Google Sheets: ' + err.toString()
+    });
+  }
+}
+
+/**
+ * 9. ENDPOINT API: doPost(e) - MENYIMPAN DATA E-RAPOR KE GOOGLE SHEETS
+ * Menerima payload JSON dari tombol "Simpan ke Google Sheets" pada frontend.
+ */
+function doPost(e) {
+  try {
+    if (!e || !e.postData || !e.postData.contents) {
+      return jsonResponse({ status: 'error', message: 'Payload data kosong.' });
+    }
+
+    const payload = JSON.parse(e.postData.contents);
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+
+    // 1. Simpan Data Siswa
+    if (payload.siswaList && Array.isArray(payload.siswaList) && payload.siswaList.length > 0) {
+      const sheetSiswa = ss.getSheetByName(SHEET_NAMES.DATA_SISWA) || ss.insertSheet(SHEET_NAMES.DATA_SISWA);
+      const rows = [
+        [
+          'NIS', 'NISN', 'Nama_Siswa', 'Kelas', 'Fase', 'Tempat_Lahir', 'Tanggal_Lahir',
+          'Jenis_Kelamin', 'Agama', 'Alamat_Siswa', 'Nama_Ayah', 'Nama_Ibu', 'Pekerjaan_Ayah', 'Pekerjaan_Ibu',
+          'Alamat_Ortu_Jalan', 'Alamat_Ortu_Desa', 'Alamat_Ortu_Kecamatan', 'Alamat_Ortu_Kota', 'Alamat_Ortu_Provinsi',
+          'Nama_Wali', 'Pekerjaan_Wali', 'Alamat_Wali'
+        ]
+      ];
+
+      payload.siswaList.forEach(function(s) {
+        rows.push([
+          String(s.nis), String(s.nisn || ''), String(s.nama), String(s.kelas || 'V'), String(s.fase || 'Fase C (Kelas V)'),
+          String(s.tempatLahir || ''), String(s.tanggalLahir || ''), String(s.jenisKelamin || 'L'), String(s.agama || 'Kristen Protestan'),
+          String(s.alamat || ''), String(s.namaAyah || ''), String(s.namaIbu || ''), String(s.pekerjaanAyah || ''), String(s.pekerjaanIbu || ''),
+          String(s.alamatOrtuJalan || ''), String(s.alamatOrtuKelurahan || ''), String(s.alamatOrtuKecamatan || ''), String(s.alamatOrtuKota || ''),
+          String(s.alamatOrtuProvinsi || ''), String(s.namaWali || '-'), String(s.pekerjaanWali || '-'), String(s.alamatWali || '-')
+        ]);
+      });
+
+      sheetSiswa.clearContents();
+      sheetSiswa.getRange(1, 1, rows.length, rows[0].length).setValues(rows);
+    }
+
+    // 2. Simpan Nilai Formatif
+    if (payload.nilaiFormatif && Array.isArray(payload.nilaiFormatif) && payload.nilaiFormatif.length > 0) {
+      const sheetFormatif = ss.getSheetByName(SHEET_NAMES.NILAI_FORMATIF) || ss.insertSheet(SHEET_NAMES.NILAI_FORMATIF);
+      const rows = [];
+      const header = ['NIS', 'Kode_Mapel'];
+      for (let i = 1; i <= 25; i++) header.push('Nilai_TP_' + i);
+      header.push('Rata_Formatif');
+      rows.push(header);
+
+      payload.nilaiFormatif.forEach(function(item) {
+        const row = [String(item.nis), String(item.kodeMapel)];
+        let total = 0;
+        let count = 0;
+        for (let i = 0; i < 25; i++) {
+          const val = item.nilaiTp && item.nilaiTp[i] ? Number(item.nilaiTp[i]) : 0;
+          row.push(val);
+          if (val > 0) {
+            total += val;
+            count++;
+          }
+        }
+        const avg = count > 0 ? Math.round((total / count) * 10) / 10 : 0;
+        row.push(avg);
+        rows.push(row);
+      });
+
+      sheetFormatif.clearContents();
+      sheetFormatif.getRange(1, 1, rows.length, rows[0].length).setValues(rows);
+    }
+
+    // 3. Simpan Nilai Sumatif
+    if (payload.nilaiSumatif && Array.isArray(payload.nilaiSumatif) && payload.nilaiSumatif.length > 0) {
+      const sheetSumatif = ss.getSheetByName(SHEET_NAMES.NILAI_SUMATIF) || ss.insertSheet(SHEET_NAMES.NILAI_SUMATIF);
+      const rows = [
+        ['NIS', 'Kode_Mapel', 'Sumatif_LM_1', 'Sumatif_LM_2', 'Sumatif_LM_3', 'Sumatif_LM_4', 'Rata_LM', 'STS', 'SAS', 'Rata_Sumatif', 'Nilai_Akhir', 'Deskripsi_Capaian']
+      ];
+
+      payload.nilaiSumatif.forEach(function(item) {
+        const lm1 = item.sumatifLm && item.sumatifLm[0] ? Number(item.sumatifLm[0]) : 0;
+        const lm2 = item.sumatifLm && item.sumatifLm[1] ? Number(item.sumatifLm[1]) : 0;
+        const lm3 = item.sumatifLm && item.sumatifLm[2] ? Number(item.sumatifLm[2]) : 0;
+        const lm4 = item.sumatifLm && item.sumatifLm[3] ? Number(item.sumatifLm[3]) : 0;
+        const sts = item.sts ? Number(item.sts) : 0;
+        const sas = item.sas ? Number(item.sas) : 0;
+
+        let lmTotal = 0;
+        let lmCount = 0;
+        [lm1, lm2, lm3, lm4].forEach(function(v) { if (v > 0) { lmTotal += v; lmCount++; } });
+        const rataLm = lmCount > 0 ? lmTotal / lmCount : 0;
+
+        let sumatifSum = 0;
+        let sumatifDiv = 0;
+        if (rataLm > 0) { sumatifSum += rataLm * 2; sumatifDiv += 2; }
+        if (sts > 0) { sumatifSum += sts; sumatifDiv += 1; }
+        if (sas > 0) { sumatifSum += sas; sumatifDiv += 1; }
+        const rataSumatif = sumatifDiv > 0 ? Math.round((sumatifSum / sumatifDiv) * 10) / 10 : 0;
+
+        rows.push([
+          String(item.nis), String(item.kodeMapel), lm1, lm2, lm3, lm4,
+          Math.round(rataLm * 10) / 10, sts, sas, rataSumatif,
+          item.nilaiAkhir ? Number(item.nilaiAkhir) : rataSumatif,
+          item.deskripsiCapaian || '-'
+        ]);
+      });
+
+      sheetSumatif.clearContents();
+      sheetSumatif.getRange(1, 1, rows.length, rows[0].length).setValues(rows);
+    }
+
+    // 4. Update Leger Nilai & Peringkat Terselubung
+    const sem = payload.semester ? Number(payload.semester) : 2;
+    prosesLegerDanPeringkatTerselubung(sem);
+
+    return jsonResponse({
+      status: 'success',
+      message: 'Seluruh data E-Rapor berhasil disinkronkan dan disimpan ke Google Sheets!',
+      timestamp: new Date().toISOString(),
+      updatedSheets: ['Data_Siswa', 'Nilai_Formatif', 'Nilai_Sumatif', 'Leger_Nilai']
+    });
+
+  } catch (err) {
+    return jsonResponse({
+      status: 'error',
+      message: 'Gagal menyimpan ke Google Sheets: ' + err.toString()
+    });
+  }
+}
+
+/**
+ * HELPER: Mengembalikan JSON Response dengan header CORS yang benar
+ */
+function jsonResponse(data) {
+  return ContentService.createTextOutput(JSON.stringify(data))
+    .setMimeType(ContentService.MimeType.JSON);
+}
 `;

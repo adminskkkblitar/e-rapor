@@ -10,6 +10,7 @@ import {
   UserAccount,
 } from '../types/rapor';
 import { DIMENSI_8_PROFIL_LULUSAN } from '../utils/raporCalculations';
+import { DATA_CP_BKPDM_2026 } from './kurikulumCpBkpm2026';
 
 export const INITIAL_USERS: UserAccount[] = [
   {
@@ -306,7 +307,7 @@ function buat25Tp(subjekSingkat: string, topik: string[], explicitTp1And2?: [str
   return result;
 }
 
-export const INITIAL_KURIKULUM: MasterKurikulumMapel[] = [
+const RAW_KURIKULUM: MasterKurikulumMapel[] = [
   {
     kodeMapel: 'PAK-01',
     namaMapel: 'Pendidikan Agama Kristen & Budi Pekerti',
@@ -448,6 +449,23 @@ export const INITIAL_KURIKULUM: MasterKurikulumMapel[] = [
     ]),
   },
 ];
+
+export const INITIAL_KURIKULUM: MasterKurikulumMapel[] = RAW_KURIKULUM.map((mapel) => {
+  const detail = DATA_CP_BKPDM_2026[mapel.kodeMapel];
+  if (!detail) return mapel;
+  return {
+    ...mapel,
+    faseAktif: 'Fase C',
+    cpFaseA: detail.cpFaseA,
+    cpFaseB: detail.cpFaseB,
+    cpFaseC: detail.cpFaseC,
+    atpFaseA: detail.atpFaseA,
+    atpFaseB: detail.atpFaseB,
+    atpFaseC: detail.atpFaseC,
+    elemenCapaian: detail.elemenCapaian,
+    fileAtpLampiran: detail.fileAtpLampiran,
+  };
+});
 
 export function getInitialNilaiFormatif(): NilaiFormatifSiswa[] {
   const data: NilaiFormatifSiswa[] = [];

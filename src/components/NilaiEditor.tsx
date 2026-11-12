@@ -35,6 +35,8 @@ import {
   Users,
   X,
   Zap,
+  UploadCloud,
+  Database,
 } from 'lucide-react';
 
 interface NilaiEditorProps {
@@ -52,6 +54,8 @@ interface NilaiEditorProps {
     value: number
   ) => void;
   userSession?: UserSession;
+  onSaveToGoogleSheets?: () => void;
+  isSavingToSheets?: boolean;
 }
 
 export const NilaiEditor: React.FC<NilaiEditorProps> = ({
@@ -64,6 +68,8 @@ export const NilaiEditor: React.FC<NilaiEditorProps> = ({
   onUpdateFormatif,
   onUpdateSumatif,
   userSession,
+  onSaveToGoogleSheets,
+  isSavingToSheets = false,
 }) => {
   // Mode View: 'massal' (Grid seluruh siswa) atau 'satuan' (Per individu siswa)
   const [inputMode, setInputMode] = useState<'massal' | 'satuan'>('massal');
@@ -77,6 +83,7 @@ export const NilaiEditor: React.FC<NilaiEditorProps> = ({
   const [selectedMapelKode, setSelectedMapelKode] = useState<string>(initialMapelKode);
   const [showAllTps, setShowAllTps] = useState<boolean>(false);
   const [searchSiswa, setSearchSiswa] = useState<string>('');
+  const [showKurikulumPatokan, setShowKurikulumPatokan] = useState<boolean>(false);
 
   // Bulk Paste Modal State
   const [isBulkPasteOpen, setIsBulkPasteOpen] = useState<boolean>(false);
@@ -459,6 +466,90 @@ export const NilaiEditor: React.FC<NilaiEditorProps> = ({
             </span>
           </div>
         </div>
+
+        {/* Patokan Penilaian & Rujukan 25 TP Accordion */}
+        <div className="mt-4 pt-4 border-t border-slate-100">
+          <button
+            type="button"
+            onClick={() => setShowKurikulumPatokan(!showKurikulumPatokan)}
+            className="w-full flex items-center justify-between p-3 rounded-xl bg-indigo-50/70 hover:bg-indigo-100/70 text-indigo-950 border border-indigo-200 transition"
+          >
+            <div className="flex items-center gap-2 text-xs font-bold">
+              <Sparkles className="w-4 h-4 text-indigo-600" />
+              <span>Patokan Penilaian & 25 Tujuan Pembelajaran ({activeMapel.namaMapel})</span>
+              <span className="px-2 py-0.5 rounded text-[10px] bg-white text-indigo-800 border border-indigo-200">
+                Fase C (Kelas V) - Kepka BKPDM No. 020/2026
+              </span>
+            </div>
+            <div className="flex items-center gap-1.5 text-xs font-semibold text-indigo-700">
+              <span>{showKurikulumPatokan ? 'Tutup Patokan' : 'Buka Patokan & Indikator TP'}</span>
+              {showKurikulumPatokan ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+            </div>
+          </button>
+
+          {showKurikulumPatokan && (
+            <div className="mt-3 p-4 rounded-xl bg-white border border-slate-200 space-y-3.5 shadow-2xs">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
+                <div className="p-3 rounded-lg bg-slate-50 border border-slate-200">
+                  <span className="font-bold text-slate-800 block mb-1 flex items-center gap-1">
+                    <Sparkles className="w-3.5 h-3.5 text-indigo-600" />
+                    Capaian Pembelajaran (CP) Aktif:
+                  </span>
+                  <p className="text-slate-600 text-[11px] leading-relaxed">
+                    {activeMapel.cpFaseC || activeMapel.cp}
+                  </p>
+                </div>
+                <div className="p-3 rounded-lg bg-slate-50 border border-slate-200">
+                  <span className="font-bold text-slate-800 block mb-1 flex items-center gap-1">
+                    <FileText className="w-3.5 h-3.5 text-indigo-600" />
+                    Alur Tujuan Pembelajaran (ATP) Aktif:
+                  </span>
+                  <p className="text-slate-600 text-[11px] leading-relaxed">
+                    {activeMapel.atpFaseC || activeMapel.atp}
+                  </p>
+                </div>
+              </div>
+
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-xs font-bold text-slate-800">
+                    Daftar Indikator 25 Tujuan Pembelajaran (Patokan Nilai Formatif):
+                  </span>
+                  <span className="text-[11px] text-slate-500">
+                    Nilai tertinggi & terendah menghasilkan kalimat capaian otomatis
+                  </span>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-2 max-h-56 overflow-y-auto pr-1">
+                  {activeMapel.tpNarasi.map((tp, idx) => (
+                    <div
+                      key={idx}
+                      className="p-2 rounded-lg bg-slate-50 border border-slate-200 flex items-start gap-2 text-[11px]"
+                    >
+                      <span className="font-bold text-indigo-700 bg-indigo-100 px-1.5 py-0.5 rounded text-[10px] shrink-0">
+                        TP_{idx + 1}
+                      </span>
+                      <span className="text-slate-700 leading-snug line-clamp-2">
+                        {tp || <em className="text-slate-400 font-normal">Belum diisi</em>}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {(activeMapel.fileAtpLampiran || []).length > 0 && (
+                <div className="p-2.5 rounded-lg bg-emerald-50 border border-emerald-200 flex items-center justify-between text-xs text-emerald-900">
+                  <span className="flex items-center gap-1.5 font-medium">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                    Tersedia berkas panduan ATP: <strong>{activeMapel.fileAtpLampiran?.[0]?.fileName}</strong>
+                  </span>
+                  <span className="text-[11px] text-emerald-700 font-semibold">
+                    Acuan Resmi Disetujui
+                  </span>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
       </div>
 
       {/* ===================================================================== */}
@@ -519,6 +610,29 @@ export const NilaiEditor: React.FC<NilaiEditorProps> = ({
                 <Download className="w-3.5 h-3.5 text-indigo-600" />
                 Unduh Format CSV
               </button>
+
+              {/* Tombol Simpan ke Google Sheets */}
+              {onSaveToGoogleSheets && (
+                <button
+                  type="button"
+                  onClick={onSaveToGoogleSheets}
+                  disabled={isSavingToSheets}
+                  className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-2xs transition"
+                  title="Kirim dan simpan data form terbaru ke endpoint Google Apps Script via fetch()"
+                >
+                  {isSavingToSheets ? (
+                    <>
+                      <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                      Menyimpan ke Sheets...
+                    </>
+                  ) : (
+                    <>
+                      <UploadCloud className="w-3.5 h-3.5" />
+                      Simpan ke Google Sheets
+                    </>
+                  )}
+                </button>
+              )}
             </div>
           </div>
 

@@ -56,10 +56,15 @@ export const PrintRaporInti: React.FC<PrintRaporIntiProps> = ({
   const paddedEkstra: { no: number; nama: string; keterangan: string }[] = [];
   for (let i = 0; i < Math.max(5, extraList.length); i++) {
     if (i < extraList.length) {
+      const eNama = (extraList[i].nama || '').trim();
+      const isValidNama = eNama && eNama !== '-' && eNama !== '0';
+      const rawKet = (extraList[i].deskripsi || `${extraList[i].predikat} dalam kegiatan ${extraList[i].nama}`).trim();
+      const isValidKet = rawKet && rawKet !== '0' && rawKet !== '-' && !rawKet.startsWith('0');
+
       paddedEkstra.push({
         no: i + 1,
-        nama: extraList[i].nama || '-',
-        keterangan: extraList[i].deskripsi || `${extraList[i].predikat} dalam kegiatan ${extraList[i].nama}` || '-',
+        nama: isValidNama ? eNama : '-',
+        keterangan: isValidNama && isValidKet ? rawKet : '-',
       });
     } else {
       paddedEkstra.push({
@@ -310,23 +315,29 @@ export const PrintRaporInti: React.FC<PrintRaporIntiProps> = ({
             <tr className="border-b border-black">
               <td className="border border-black p-1.5 w-36">Sakit</td>
               <td className="border border-black p-1.5 w-12 text-center font-bold">
-                {absensi ? absensi.sakit : 0}
+                {absensi && Number(absensi.sakit) > 0 ? absensi.sakit : '-'}
               </td>
-              <td className="border border-black p-1.5 text-center">hari</td>
+              <td className="border border-black p-1.5 text-center">
+                {absensi && Number(absensi.sakit) > 0 ? 'hari' : '-'}
+              </td>
             </tr>
             <tr className="border-b border-black">
               <td className="border border-black p-1.5">Izin</td>
               <td className="border border-black p-1.5 text-center font-bold">
-                {absensi ? absensi.izin : 0}
+                {absensi && Number(absensi.izin) > 0 ? absensi.izin : '-'}
               </td>
-              <td className="border border-black p-1.5 text-center">hari</td>
+              <td className="border border-black p-1.5 text-center">
+                {absensi && Number(absensi.izin) > 0 ? 'hari' : '-'}
+              </td>
             </tr>
             <tr className="border-b border-black">
               <td className="border border-black p-1.5">Tanpa Keterangan</td>
               <td className="border border-black p-1.5 text-center font-bold">
-                {absensi ? absensi.tanpaKeterangan : 0}
+                {absensi && Number(absensi.tanpaKeterangan) > 0 ? absensi.tanpaKeterangan : '-'}
               </td>
-              <td className="border border-black p-1.5 text-center">hari</td>
+              <td className="border border-black p-1.5 text-center">
+                {absensi && Number(absensi.tanpaKeterangan) > 0 ? 'hari' : '-'}
+              </td>
             </tr>
           </tbody>
         </table>

@@ -49,14 +49,21 @@ import { RoleLoginModal } from './components/RoleLoginModal';
 import { LoginPage } from './components/LoginPage';
 import { AdminUserManager } from './components/AdminUserManager';
 import { Sidebar, TabType } from './components/Sidebar';
+import { GasSyncPayload, getStoredGasUrl, saveToGoogleSheets } from './utils/gasSyncService';
 import {
+  AlertCircle,
   Calendar,
+  CheckCircle2,
+  Database,
   FileText,
   Menu,
   Printer,
+  RefreshCw,
   School,
   Sparkles,
+  UploadCloud,
   Users,
+  XCircle,
 } from 'lucide-react';
 
 export default function App() {
@@ -112,6 +119,63 @@ export default function App() {
   const [isSettingsOpen, setIsSettingsOpen] = useState<boolean>(false);
   const [isAbsensiModalOpen, setIsAbsensiModalOpen] = useState<boolean>(false);
   const [isRoleModalOpen, setIsRoleModalOpen] = useState<boolean>(false);
+
+  // Google Apps Script Sync State
+  const [isSavingToSheets, setIsSavingToSheets] = useState<boolean>(false);
+  const [syncNotification, setSyncNotification] = useState<{
+    type: 'loading' | 'success' | 'error';
+    message: string;
+    timestamp?: string;
+  } | null>(null);
+
+  const handleSaveToGoogleSheets = async () => {
+    const url = getStoredGasUrl();
+    if (!url) {
+      setIsGasModalOpen(true);
+      setSyncNotification({
+        type: 'error',
+        message: 'Silakan masukkan URL Web App Google Apps Script Anda terlebih dahulu untuk memulai sinkronisasi.',
+      });
+      return;
+    }
+
+    setIsSavingToSheets(true);
+    setSyncNotification({
+      type: 'loading',
+      message: 'Menyimpan data siswa dan nilai terbaru ke Google Sheets...',
+    });
+
+    const payload: GasSyncPayload = {
+      action: 'saveAll',
+      semester,
+      siswaList,
+      kurikulum,
+      nilaiFormatif,
+      nilaiSumatif,
+      kokurikulerList,
+      ekstrakurikulerList,
+      absensiList,
+    };
+
+    const result = await saveToGoogleSheets(url, payload);
+    setIsSavingToSheets(false);
+
+    if (result.success) {
+      setSyncNotification({
+        type: 'success',
+        message: result.message || 'Data berhasil disimpan dan disinkronkan ke Google Sheets!',
+        timestamp: new Date().toLocaleTimeString('id-ID'),
+      });
+      setTimeout(() => {
+        setSyncNotification((prev) => (prev?.type === 'success' ? null : prev));
+      }, 6000);
+    } else {
+      setSyncNotification({
+        type: 'error',
+        message: result.message || 'Gagal menyimpan ke Google Sheets.',
+      });
+    }
+  };
 
   // Active Student
   const activeSiswa = useMemo(() => {
@@ -652,6 +716,19 @@ export default function App() {
           <div className="flex items-center gap-1.5">
             <button
               type="button"
+              onClick={handleSaveToGoogleSheets}
+              disabled={isSavingToSheets}
+              className="p-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold flex items-center gap-1"
+              title="Simpan ke Google Sheets"
+            >
+              {isSavingToSheets ? (
+                <RefreshCw className="w-4 h-4 animate-spin" />
+              ) : (
+                <UploadCloud className="w-4 h-4" />
+              )}
+            </button>
+            <button
+              type="button"
               onClick={handlePrint}
               className="p-1.5 bg-indigo-600 text-white rounded-lg text-xs font-bold"
               title="Cetak A4"
@@ -660,6 +737,122 @@ export default function App() {
             </button>
           </div>
         </header>
+
+        {/* Desktop & Tablet Top Bar (no-print) */}
+        <header className="hidden md:flex no-print bg-white border-b border-slate-200 px-6 py-3 items-center justify-between sticky top-0 z-20 shadow-2xs">
+          <div>
+            <h2 className="text-sm font-bold text-slate-900 capitalize flex items-center gap-2">
+              {activeTab === 'dashboard' && 'Dashboard Utama & Capaian Kelas'}
+              {activeTab === 'preview' && 'Pratinjau & Format Cetak Rapor (A4)'}
+              {activeTab === 'nilai' && 'Penilaian Formatif 25 TP & Sumatif'}
+              {activeTab === 'kokurikuler' && 'Penilaian Kokurikuler 8 Dimensi & Ekstrakurikuler'}
+              {activeTab === 'leger' && 'Leger Nilai & Peringkat Terselubung'}
+              {activeTab === 'siswa' && 'Manajemen Data Peserta Didik'}
+              {activeTab === 'kurikulum' && 'Master Kurikulum & Capaian Pembelajaran (Fase A-C)'}
+              {activeTab === 'guru_manager' && 'Manajemen Akun Guru & Akses Role'}
+            </h2>
+            <p className="text-[11px] text-slate-500">
+              {sekolah.namaSekolah} • Semester {semester} ({semester === 2 ? 'Genap' : 'Ganjil'}) • TP {sekolah.tahunPelajaran}
+            </p>
+          </div>
+
+          <div className="flex items-center gap-2.5">
+            {/* Tombol Simpan ke Google Sheets */}
+            <button
+              type="button"
+              onClick={handleSaveToGoogleSheets}
+              disabled={isSavingToSheets}
+              className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white rounded-xl text-xs font-bold flex items-center gap-2 shadow-xs transition"
+              title="Simpan seluruh data terbaru ke Google Sheets via endpoint Web App Apps Script"
+            >
+              {isSavingToSheets ? (
+                <>
+                  <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                  Menyimpan ke Sheets...
+                </>
+              ) : (
+                <>
+                  <UploadCloud className="w-3.5 h-3.5" />
+                  Simpan ke Google Sheets
+                </>
+              )}
+            </button>
+
+            {/* Tombol Konfigurasi GAS */}
+            <button
+              type="button"
+              onClick={() => setIsGasModalOpen(true)}
+              className="px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold flex items-center gap-1.5 transition"
+              title="Buka dialog integrasi Google Apps Script & Cloudflare"
+            >
+              <Database className="w-3.5 h-3.5 text-slate-600" />
+              Integrasi GAS
+            </button>
+
+            <button
+              type="button"
+              onClick={handlePrint}
+              className="p-2 bg-slate-800 hover:bg-slate-900 text-white rounded-xl text-xs font-bold transition"
+              title="Cetak Halaman (Ctrl+P)"
+            >
+              <Printer className="w-4 h-4" />
+            </button>
+          </div>
+        </header>
+
+        {/* Global Sync Notification Banner */}
+        {syncNotification && (
+          <div className="no-print px-4 sm:px-6 pt-3">
+            <div
+              className={`p-3.5 rounded-xl border flex items-center justify-between text-xs transition shadow-xs ${
+                syncNotification.type === 'loading'
+                  ? 'bg-sky-50 border-sky-200 text-sky-900'
+                  : syncNotification.type === 'success'
+                  ? 'bg-emerald-50 border-emerald-300 text-emerald-950'
+                  : 'bg-rose-50 border-rose-300 text-rose-950'
+              }`}
+            >
+              <div className="flex items-center gap-2.5">
+                {syncNotification.type === 'loading' && (
+                  <RefreshCw className="w-4 h-4 text-sky-600 animate-spin shrink-0" />
+                )}
+                {syncNotification.type === 'success' && (
+                  <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                )}
+                {syncNotification.type === 'error' && (
+                  <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+                )}
+                <div>
+                  <span className="font-bold">{syncNotification.message}</span>
+                  {syncNotification.timestamp && (
+                    <span className="text-[11px] opacity-75 ml-2">
+                      (Pukul {syncNotification.timestamp})
+                    </span>
+                  )}
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2">
+                {syncNotification.type === 'error' && (
+                  <button
+                    type="button"
+                    onClick={() => setIsGasModalOpen(true)}
+                    className="text-xs font-bold underline text-rose-700 hover:text-rose-900 mr-2"
+                  >
+                    Atur URL GAS
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={() => setSyncNotification(null)}
+                  className="text-slate-400 hover:text-slate-700 font-bold p-1 rounded text-sm leading-none"
+                >
+                  ✕
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Content Container */}
         <main className="flex-1 p-4 sm:p-6 lg:p-8 max-w-7xl w-full mx-auto">
@@ -778,6 +971,8 @@ export default function App() {
               onUpdateFormatif={handleUpdateFormatif}
               onUpdateSumatif={handleUpdateSumatif}
               userSession={userSession}
+              onSaveToGoogleSheets={handleSaveToGoogleSheets}
+              isSavingToSheets={isSavingToSheets}
             />
           )}
 
@@ -873,6 +1068,8 @@ export default function App() {
       <GasIntegrationModal
         isOpen={isGasModalOpen}
         onClose={() => setIsGasModalOpen(false)}
+        onSaveToGoogleSheets={handleSaveToGoogleSheets}
+        isSaving={isSavingToSheets}
       />
 
       {/* MODAL: EDIT PROFIL SEKOLAH & TITIMANGSA */}

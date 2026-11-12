@@ -1,8 +1,13 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   GOOGLE_APPS_SCRIPT_CODE_GS,
   GOOGLE_SHEETS_HEADERS,
 } from '../utils/gasCode';
+import {
+  getStoredGasUrl,
+  setStoredGasUrl,
+  testGasConnection as testGasService,
+} from '../utils/gasSyncService';
 import {
   AlertCircle,
   Check,
@@ -19,22 +24,37 @@ import {
   Server,
   Sparkles,
   Terminal,
+  UploadCloud,
+  RefreshCw,
+  CheckCircle2,
+  XCircle,
 } from 'lucide-react';
 
 interface GasIntegrationModalProps {
   isOpen: boolean;
   onClose: () => void;
+  onSaveToGoogleSheets?: () => Promise<void>;
+  isSaving?: boolean;
 }
 
 export const GasIntegrationModal: React.FC<GasIntegrationModalProps> = ({
   isOpen,
   onClose,
+  onSaveToGoogleSheets,
+  isSaving = false,
 }) => {
-  const [activeTab, setActiveTab] = useState<'headers' | 'codegs' | 'cloudflare' | 'guide'>('headers');
+  const [activeTab, setActiveTab] = useState<'headers' | 'codegs' | 'cloudflare' | 'guide'>('guide');
   const [copiedSection, setCopiedSection] = useState<string | null>(null);
   const [gasUrlInput, setGasUrlInput] = useState<string>('');
-  const [testResult, setTestResult] = useState<string | null>(null);
+  const [testResult, setTestResult] = useState<{ success: boolean; message: string; timestamp?: string } | null>(null);
   const [isTesting, setIsTesting] = useState<boolean>(false);
+  const [urlSaveSuccess, setUrlSaveSuccess] = useState<boolean>(false);
+
+  useEffect(() => {
+    if (isOpen) {
+      setGasUrlInput(getStoredGasUrl());
+    }
+  }, [isOpen]);
 
   if (!isOpen) return null;
 
@@ -44,21 +64,33 @@ export const GasIntegrationModal: React.FC<GasIntegrationModalProps> = ({
     setTimeout(() => setCopiedSection(null), 2500);
   };
 
-  const testGasConnection = async () => {
+  const handleSaveUrl = () => {
+    setStoredGasUrl(gasUrlInput);
+    setUrlSaveSuccess(true);
+    setTimeout(() => setUrlSaveSuccess(false), 2500);
+  };
+
+  const runTestConnection = async () => {
     if (!gasUrlInput.trim()) {
-      setTestResult('Silakan masukkan URL Web App Google Apps Script Anda terlebih dahulu.');
+      setTestResult({
+        success: false,
+        message: 'Silakan masukkan URL Web App Google Apps Script Anda terlebih dahulu.',
+      });
       return;
     }
+    setStoredGasUrl(gasUrlInput);
     setIsTesting(true);
     setTestResult(null);
-    try {
-      const response = await fetch(`${gasUrlInput.trim()}?action=test`);
-      const data = await response.json();
-      setTestResult(`Koneksi Berhasil! Respons: ${JSON.stringify(data)}`);
-    } catch (err: any) {
-      setTestResult(`Koneksi Terhubung / Menunggu Otorisasi: ${err.message || err.toString()}`);
-    } finally {
-      setIsTesting(false);
+
+    const res = await testGasService(gasUrlInput.trim());
+    setIsTesting(false);
+    setTestResult(res);
+  };
+
+  const handleTriggerSave = async () => {
+    setStoredGasUrl(gasUrlInput);
+    if (onSaveToGoogleSheets) {
+      await onSaveToGoogleSheets();
     }
   };
 
@@ -73,13 +105,13 @@ export const GasIntegrationModal: React.FC<GasIntegrationModalProps> = ({
             </div>
             <div>
               <h2 className="text-lg font-bold flex items-center gap-2">
-                Otomasi Google Sheets & Deploy Cloudflare Pages
-                <span className="text-[10px] bg-amber-500/30 text-amber-300 border border-amber-500/40 px-2 py-0.5 rounded-full font-semibold">
-                  SD Kristen Kalam Kudus Blitar
+                Integrasi Google Apps Script (GAS) & Google Sheets API
+                <span className="text-[10px] bg-emerald-500/30 text-emerald-300 border border-emerald-500/40 px-2 py-0.5 rounded-full font-semibold">
+                  API & Sync Aktif
                 </span>
               </h2>
               <p className="text-xs text-slate-400">
-                Generate header otomatis, skrip Code.gs terpusat, dan panduan deploy production ke Cloudflare Pages.
+                Hubungkan frontend E-Rapor ke basis data Google Sheets dengan skrip <code>doGet()</code> dan <code>doPost()</code>.
               </p>
             </div>
           </div>
@@ -94,15 +126,15 @@ export const GasIntegrationModal: React.FC<GasIntegrationModalProps> = ({
         {/* Tab Navigator */}
         <div className="flex border-b border-slate-200 bg-slate-50 px-6 pt-2 gap-2 text-xs font-bold overflow-x-auto">
           <button
-            onClick={() => setActiveTab('headers')}
+            onClick={() => setActiveTab('guide')}
             className={`pb-3 px-4 flex items-center gap-2 border-b-2 transition whitespace-nowrap ${
-              activeTab === 'headers'
+              activeTab === 'guide'
                 ? 'border-emerald-600 text-emerald-700 font-extrabold'
                 : 'border-transparent text-slate-600 hover:text-slate-900'
             }`}
           >
-            <FileSpreadsheet className="w-4 h-4" />
-            1. Struktur Header Kolom (7 Sheet)
+            <Terminal className="w-4 h-4 text-emerald-600" />
+            1. Simpan & Uji Endpoint Web App (doGet / doPost)
           </button>
           <button
             onClick={() => setActiveTab('codegs')}
@@ -112,8 +144,19 @@ export const GasIntegrationModal: React.FC<GasIntegrationModalProps> = ({
                 : 'border-transparent text-slate-600 hover:text-slate-900'
             }`}
           >
-            <Code className="w-4 h-4" />
-            2. Otomasi Code.gs Backend
+            <Code className="w-4 h-4 text-indigo-600" />
+            2. Skrip Lengkap Code.gs (doGet & doPost)
+          </button>
+          <button
+            onClick={() => setActiveTab('headers')}
+            className={`pb-3 px-4 flex items-center gap-2 border-b-2 transition whitespace-nowrap ${
+              activeTab === 'headers'
+                ? 'border-indigo-600 text-indigo-700 font-extrabold'
+                : 'border-transparent text-slate-600 hover:text-slate-900'
+            }`}
+          >
+            <FileSpreadsheet className="w-4 h-4" />
+            3. Struktur 7 Header Sheet
           </button>
           <button
             onClick={() => setActiveTab('cloudflare')}
@@ -124,24 +167,201 @@ export const GasIntegrationModal: React.FC<GasIntegrationModalProps> = ({
             }`}
           >
             <Cloud className="w-4 h-4 text-amber-500" />
-            3. Panduan Deploy ke Cloudflare
-          </button>
-          <button
-            onClick={() => setActiveTab('guide')}
-            className={`pb-3 px-4 flex items-center gap-2 border-b-2 transition whitespace-nowrap ${
-              activeTab === 'guide'
-                ? 'border-sky-600 text-sky-700 font-extrabold'
-                : 'border-transparent text-slate-600 hover:text-slate-900'
-            }`}
-          >
-            <Terminal className="w-4 h-4" />
-            4. Uji Koneksi API (GAS & Cloudflare)
+            4. Panduan Deploy Cloudflare Pages
           </button>
         </div>
 
         {/* Body Content */}
         <div className="flex-1 overflow-y-auto p-6 space-y-6">
-          {/* TAB 1: HEADERS */}
+          {/* TAB 1: API TESTER & DIRECT SYNC */}
+          {activeTab === 'guide' && (
+            <div className="space-y-6">
+              <div className="bg-gradient-to-r from-emerald-50 to-teal-50 border border-emerald-200 p-5 rounded-2xl">
+                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                  <div>
+                    <span className="text-[10px] font-bold tracking-wider uppercase bg-emerald-200 text-emerald-900 px-2 py-0.5 rounded-md">
+                      Endpoint Integrasi Google Sheets
+                    </span>
+                    <h3 className="text-base font-bold text-emerald-950 mt-1">
+                      URL Web App Google Apps Script
+                    </h3>
+                    <p className="text-xs text-emerald-800 mt-0.5 max-w-2xl leading-relaxed">
+                      Masukkan URL Web App hasil deploy skrip <code>Code.gs</code> dari Google Spreadsheet Anda. Frontend akan mengirimkan data form terbaru langsung via <code>fetch()</code> ke endpoint <code>doPost()</code> ini.
+                    </p>
+                  </div>
+
+                  <div className="flex items-center gap-2 shrink-0">
+                    <button
+                      type="button"
+                      onClick={handleTriggerSave}
+                      disabled={isSaving}
+                      className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-bold text-xs rounded-xl flex items-center gap-2 shadow-xs transition"
+                    >
+                      {isSaving ? (
+                        <>
+                          <RefreshCw className="w-4 h-4 animate-spin" />
+                          Menyimpan Data...
+                        </>
+                      ) : (
+                        <>
+                          <UploadCloud className="w-4 h-4" />
+                          Simpan ke Google Sheets Sekarang
+                        </>
+                      )}
+                    </button>
+                  </div>
+                </div>
+
+                <div className="mt-4 pt-4 border-t border-emerald-200/60 space-y-3">
+                  <div>
+                    <label className="block text-xs font-bold text-emerald-950 mb-1">
+                      URL Web App Google Apps Script (Deployment ID / Exec URL):
+                    </label>
+                    <div className="flex flex-col sm:flex-row gap-2">
+                      <input
+                        type="url"
+                        placeholder="https://script.google.com/macros/s/AKfycb.../exec"
+                        value={gasUrlInput}
+                        onChange={(e) => setGasUrlInput(e.target.value)}
+                        className="flex-1 bg-white border border-emerald-300 rounded-xl px-3.5 py-2 text-xs font-mono text-slate-900 focus:ring-2 focus:ring-emerald-500 shadow-2xs"
+                      />
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={handleSaveUrl}
+                          className="px-3.5 py-2 bg-slate-800 hover:bg-slate-900 text-white font-bold text-xs rounded-xl transition flex items-center gap-1.5"
+                        >
+                          <Check className="w-3.5 h-3.5" />
+                          {urlSaveSuccess ? 'Tersimpan!' : 'Simpan URL'}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={runTestConnection}
+                          disabled={isTesting}
+                          className="px-3.5 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white font-bold text-xs rounded-xl flex items-center gap-1.5 transition shadow-2xs"
+                        >
+                          {isTesting ? (
+                            <>
+                              <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                              Menguji...
+                            </>
+                          ) : (
+                            <>
+                              <Play className="w-3.5 h-3.5" />
+                              Uji Koneksi (doGet)
+                            </>
+                          )}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+
+                  {testResult && (
+                    <div
+                      className={`p-3.5 rounded-xl border text-xs flex items-start gap-2.5 ${
+                        testResult.success
+                          ? 'bg-emerald-100/70 border-emerald-300 text-emerald-950'
+                          : 'bg-rose-50 border-rose-200 text-rose-900'
+                      }`}
+                    >
+                      {testResult.success ? (
+                        <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                      ) : (
+                        <XCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+                      )}
+                      <div className="flex-1">
+                        <p className="font-bold">{testResult.message}</p>
+                        {testResult.timestamp && (
+                          <p className="text-[11px] opacity-75 mt-0.5">Waktu: {testResult.timestamp}</p>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Step-by-Step Setup Guide */}
+              <div className="bg-white rounded-xl border border-slate-200 p-5 space-y-4">
+                <h4 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+                  <Sparkles className="w-4 h-4 text-indigo-600" />
+                  3 Langkah Cepat Memasang Skrip di Google Spreadsheet Anda:
+                </h4>
+
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
+                  <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 space-y-1.5">
+                    <span className="w-6 h-6 rounded-full bg-indigo-100 text-indigo-800 font-bold flex items-center justify-center text-xs">
+                      1
+                    </span>
+                    <h5 className="font-bold text-slate-900">Buka Apps Script</h5>
+                    <p className="text-slate-600 leading-relaxed text-[11px]">
+                      Di Google Spreadsheet Anda, klik menu <strong>Ekstensi (Extensions)</strong> &gt; <strong>Apps Script</strong>.
+                    </p>
+                  </div>
+
+                  <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 space-y-1.5">
+                    <span className="w-6 h-6 rounded-full bg-indigo-100 text-indigo-800 font-bold flex items-center justify-center text-xs">
+                      2
+                    </span>
+                    <h5 className="font-bold text-slate-900">Salin & Simpan Code.gs</h5>
+                    <p className="text-slate-600 leading-relaxed text-[11px]">
+                      Buka tab <strong>"2. Otomasi Code.gs Backend"</strong> di atas, klik tombol <strong>Salin Seluruh Skrip Code.gs</strong>, lalu tempel di editor dan simpan (Ctrl+S).
+                    </p>
+                  </div>
+
+                  <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 space-y-1.5">
+                    <span className="w-6 h-6 rounded-full bg-indigo-100 text-indigo-800 font-bold flex items-center justify-center text-xs">
+                      3
+                    </span>
+                    <h5 className="font-bold text-slate-900">Deploy sebagai Web App</h5>
+                    <p className="text-slate-600 leading-relaxed text-[11px]">
+                      Klik tombol <strong>Deploy</strong> &gt; <strong>New Deployment</strong>. Pilih jenis <strong>Web App</strong>. Setel <em>Execute as: Me</em> dan <em>Who has access: Anyone (Siapa saja)</em>. Salin URL Web App dan tempel pada kolom di atas!
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* TAB 2: CODE.GS FULL SCRIPT */}
+          {activeTab === 'codegs' && (
+            <div className="space-y-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-indigo-50/70 p-4 rounded-xl border border-indigo-200">
+                <div>
+                  <h3 className="text-sm font-bold text-indigo-950 flex items-center gap-2">
+                    <Code className="w-4 h-4 text-indigo-600" />
+                    Skrip Lengkap Google Apps Script (Code.gs)
+                  </h3>
+                  <p className="text-xs text-indigo-800 mt-0.5">
+                    Mencakup <code>setupDatabaseSheets()</code>, fungsi kalkulasi rapor, serta API endpoint <code>doGet(e)</code> dan <code>doPost(e)</code>.
+                  </p>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => copyToClipboard(GOOGLE_APPS_SCRIPT_CODE_GS, 'full_codegs')}
+                  className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-bold flex items-center gap-1.5 shrink-0 shadow-xs transition"
+                >
+                  {copiedSection === 'full_codegs' ? (
+                    <>
+                      <Check className="w-3.5 h-3.5" /> Skrip Berhasil Disalin!
+                    </>
+                  ) : (
+                    <>
+                      <Copy className="w-3.5 h-3.5" /> Salin Seluruh Skrip Code.gs
+                    </>
+                  )}
+                </button>
+              </div>
+
+              <div className="relative">
+                <pre className="p-4 bg-slate-900 text-slate-200 rounded-xl font-mono text-[11px] leading-relaxed max-h-[500px] overflow-y-auto">
+                  {GOOGLE_APPS_SCRIPT_CODE_GS}
+                </pre>
+              </div>
+            </div>
+          )}
+
+          {/* TAB 3: HEADERS */}
           {activeTab === 'headers' && (
             <div className="space-y-6">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-emerald-50/70 p-4 rounded-xl border border-emerald-200">
@@ -201,28 +421,19 @@ export const GasIntegrationModal: React.FC<GasIntegrationModalProps> = ({
                           </>
                         ) : (
                           <>
-                            <Copy className="w-3.5 h-3.5" /> Salin Baris (TSV)
+                            <Copy className="w-3.5 h-3.5" /> Salin Header
                           </>
                         )}
                       </button>
                     </div>
 
-                    <div className="p-3 bg-slate-50/50">
+                    <div className="p-3 overflow-x-auto">
                       <div className="flex flex-wrap gap-1.5">
                         {sheet.columns.map((col, cIdx) => (
                           <span
                             key={cIdx}
-                            className={`font-mono text-[11px] px-2 py-0.5 rounded border ${
-                              col.startsWith('TP_') || col.startsWith('Nilai_TP_')
-                                ? 'bg-sky-50 text-sky-800 border-sky-200'
-                                : col.includes('Predikat')
-                                ? 'bg-purple-50 text-purple-800 border-purple-200'
-                                : col.includes('Peringkat')
-                                ? 'bg-amber-100 text-amber-900 border-amber-300 font-bold'
-                                : 'bg-white text-slate-800 border-slate-300'
-                            }`}
+                            className="px-2 py-1 rounded bg-slate-50 border border-slate-200 text-slate-700 font-mono text-[11px]"
                           >
-                            <span className="text-slate-400 mr-1 text-[10px]">{cIdx + 1}.</span>
                             {col}
                           </span>
                         ))}
@@ -234,167 +445,37 @@ export const GasIntegrationModal: React.FC<GasIntegrationModalProps> = ({
             </div>
           )}
 
-          {/* TAB 2: CODE.GS */}
-          {activeTab === 'codegs' && (
-            <div className="space-y-4">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 bg-indigo-50/70 p-4 rounded-xl border border-indigo-200">
-                <div>
-                  <h3 className="text-sm font-bold text-indigo-950">
-                    Kode Lengkap Google Apps Script (Code.gs)
-                  </h3>
-                  <p className="text-xs text-indigo-800">
-                    Jalankan fungsi <code>setupDatabaseSheets()</code> untuk membuat seluruh 7 sheet, membekukan baris header, dan mengisikan data awal secara otomatis!
-                  </p>
-                </div>
-                <button
-                  onClick={() =>
-                    copyToClipboard(GOOGLE_APPS_SCRIPT_CODE_GS, 'full_codegs')
-                  }
-                  className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-lg flex items-center justify-center gap-2 shadow-sm transition shrink-0"
-                >
-                  {copiedSection === 'full_codegs' ? (
-                    <>
-                      <Check className="w-4 h-4 text-emerald-300" /> Berhasil Disalin!
-                    </>
-                  ) : (
-                    <>
-                      <Copy className="w-4 h-4" /> Salin Seluruh Kode Code.gs
-                    </>
-                  )}
-                </button>
-              </div>
-
-              <div className="relative rounded-xl overflow-hidden border border-slate-800 bg-slate-950 text-slate-100 font-mono text-xs">
-                <div className="px-4 py-2 bg-slate-900 text-slate-400 text-[11px] border-b border-slate-800 flex justify-between items-center">
-                  <span>Google Apps Script / Code.gs (V8 Runtime)</span>
-                  <span className="text-emerald-400">Termasuk setupDatabaseSheets()</span>
-                </div>
-                <pre className="p-4 max-h-[460px] overflow-auto leading-relaxed select-all">
-                  {GOOGLE_APPS_SCRIPT_CODE_GS}
-                </pre>
-              </div>
-            </div>
-          )}
-
-          {/* TAB 3: PANDUAN DEPLOY KE CLOUDFLARE */}
+          {/* TAB 4: CLOUDFLARE PAGES GUIDE */}
           {activeTab === 'cloudflare' && (
-            <div className="space-y-6 text-sm text-slate-800">
-              <div className="bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200 rounded-2xl p-6 space-y-4">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-amber-500 text-white flex items-center justify-center shadow-sm">
-                    <Cloud className="w-6 h-6" />
-                  </div>
-                  <div>
-                    <h3 className="text-base font-bold text-amber-950">
-                      Cara Deploy Aplikasi ke Cloudflare Pages (Gratis & Ultra Cepat)
-                    </h3>
-                    <p className="text-xs text-amber-800">
-                      Aplikasi ini dibangun dengan arsitektur SPA Vite standar, 100% kompatibel dan siap di-deploy langsung ke Cloudflare Pages.
-                    </p>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
-                  <div className="bg-white p-4 rounded-xl border border-amber-200/80 shadow-2xs space-y-2">
-                    <span className="font-bold text-xs uppercase tracking-wider text-amber-800 block">
-                      Metode 1: Hubungkan ke GitHub (Otomatis & Disarankan)
-                    </span>
-                    <ol className="list-decimal list-inside space-y-1.5 text-xs text-slate-700">
-                      <li>Push kode aplikasi ini ke repository <strong>GitHub</strong> Anda.</li>
-                      <li>Buka dashboard <strong>Cloudflare</strong> &gt; <strong>Workers & Pages</strong>.</li>
-                      <li>Klik <strong>Create application</strong> &gt; pilih tab <strong>Pages</strong> &gt; <strong>Connect to Git</strong>.</li>
-                      <li>Pilih repository Anda, lalu masukkan pengaturan build:</li>
-                    </ol>
-                    <div className="p-2.5 bg-slate-900 text-white rounded-lg font-mono text-[11px] space-y-1">
-                      <p><span className="text-slate-400">Framework preset:</span> <strong className="text-emerald-400">Vite</strong></p>
-                      <p><span className="text-slate-400">Build command:</span> <strong className="text-amber-300">npm run build</strong></p>
-                      <p><span className="text-slate-400">Build output directory:</span> <strong className="text-sky-300">dist</strong></p>
-                    </div>
-                  </div>
-
-                  <div className="bg-white p-4 rounded-xl border border-amber-200/80 shadow-2xs space-y-2">
-                    <span className="font-bold text-xs uppercase tracking-wider text-amber-800 block">
-                      Metode 2: Deploy Cepat via Wrangler CLI (Terminal)
-                    </span>
-                    <p className="text-xs text-slate-700">
-                      Jika Anda ingin mendeploy langsung dari komputer/terminal tanpa GitHub, jalankan 2 perintah berikut:
-                    </p>
-                    <div className="p-3 bg-slate-900 text-white rounded-lg font-mono text-xs space-y-2">
-                      <p className="text-slate-400"># 1. Bangun bundle aplikasi:</p>
-                      <p className="text-emerald-400">npm run build</p>
-                      <p className="text-slate-400"># 2. Deploy ke Cloudflare Pages:</p>
-                      <p className="text-amber-300">npx wrangler pages deploy dist --project-name=rapor-kalamkudus</p>
-                    </div>
-                    <p className="text-[11px] text-slate-500">
-                      File konfigurasi <code>wrangler.toml</code> dan header CORS <code>_headers</code> sudah disediakan di root folder aplikasi!
-                    </p>
-                  </div>
-                </div>
-              </div>
-
-              {/* Integrasi Antara Cloudflare Frontend dan Google Sheets Backend */}
-              <div className="bg-white p-5 rounded-2xl border border-slate-200 space-y-3">
-                <h4 className="font-bold text-slate-900 flex items-center gap-2">
-                  <Server className="w-4 h-4 text-indigo-600" />
-                  Bagaimana Frontend Cloudflare Berbicara dengan Google Sheets?
-                </h4>
-                <div className="text-xs text-slate-600 space-y-2 leading-relaxed">
-                  <p>
-                    Frontend Anda di Cloudflare adalah web app modern yang berjalan di browser pengguna dengan kecepatan tinggi (CDN global Cloudflare). Data nilai, kurikulum, dan rapor disimpan secara terpusat di <strong>Google Sheets</strong> Anda via skrip <strong>Google Apps Script (Web App)</strong>.
+            <div className="space-y-6">
+              <div className="bg-amber-50 border border-amber-200 p-4 rounded-xl flex items-start gap-3">
+                <Rocket className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+                <div className="text-xs text-amber-950 space-y-1">
+                  <p className="font-bold">Aplikasi Ini Siap 100% untuk Cloudflare Pages</p>
+                  <p className="leading-relaxed">
+                    Aplikasi E-Rapor ini dibangun dengan arsitektur SPA statis murni (*Client-Side React SPA*) yang kompatibel penuh dengan Cloudflare Pages, Cloudflare Workers, maupun hosting statis global lainnya tanpa memerlukan server Node.js khusus.
                   </p>
-                  <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 flex items-center justify-between">
-                    <div>
-                      <p className="font-bold text-slate-900">Arsitektur Hybrid Bebas Biaya Server:</p>
-                      <p className="text-slate-500">Cloudflare Pages (Frontend Hosting Gratis) ⇄ Web App API Google Apps Script ⇄ Google Sheets Database</p>
+                </div>
+              </div>
+
+              <div className="bg-white p-5 rounded-2xl border border-slate-200 space-y-4">
+                <h4 className="font-bold text-slate-900 flex items-center gap-2">
+                  <Globe className="w-4 h-4 text-indigo-600" />
+                  Metode 1: Hubungkan ke GitHub (Otomatis & Direkomendasikan)
+                </h4>
+                <ol className="list-decimal list-inside space-y-2 text-xs text-slate-700 leading-relaxed">
+                  <li>Buat repositori baru di GitHub (misal: <code>erapor-kalamkudus</code>) dan push kode aplikasi ini.</li>
+                  <li>Buka dashboard <strong>Cloudflare Dashboard</strong> &gt; pilih <strong>Workers & Pages</strong>.</li>
+                  <li>Klik <strong>Create application</strong> &gt; pilih tab <strong>Pages</strong> &gt; <strong>Connect to Git</strong>.</li>
+                  <li>Pilih repositori Anda, lalu masukkan pengaturan build berikut:
+                    <div className="mt-2 p-3 bg-slate-900 text-white rounded-lg font-mono text-xs space-y-1">
+                      <p><span className="text-slate-400">Framework preset:</span> <span className="text-emerald-400">Vite</span></p>
+                      <p><span className="text-slate-400">Build command:</span> <span className="text-emerald-400">npm run build</span></p>
+                      <p><span className="text-slate-400">Build output directory:</span> <span className="text-emerald-400">dist</span></p>
                     </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* TAB 4: API TESTER */}
-          {activeTab === 'guide' && (
-            <div className="space-y-4">
-              <div>
-                <h3 className="text-base font-bold text-slate-900">
-                  Uji Integrasi API Web App Google Apps Script
-                </h3>
-                <p className="text-xs text-slate-500">
-                  Setelah men-deploy skrip Code.gs sebagai Web App ("Anyone" access), masukkan URL Web App untuk memverifikasi endpoint API Anda.
-                </p>
-              </div>
-
-              <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-3">
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">
-                    URL Web App Google Apps Script:
-                  </label>
-                  <div className="flex gap-2">
-                    <input
-                      type="url"
-                      placeholder="https://script.google.com/macros/s/AKfycb.../exec"
-                      value={gasUrlInput}
-                      onChange={(e) => setGasUrlInput(e.target.value)}
-                      className="flex-1 bg-white border border-slate-300 rounded-lg px-3 py-2 text-xs font-mono text-slate-900 focus:ring-2 focus:ring-indigo-500"
-                    />
-                    <button
-                      type="button"
-                      onClick={testGasConnection}
-                      disabled={isTesting}
-                      className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white font-bold text-xs rounded-lg flex items-center gap-1.5 transition"
-                    >
-                      <Play className="w-3.5 h-3.5" />
-                      {isTesting ? 'Menguji...' : 'Uji Koneksi'}
-                    </button>
-                  </div>
-                </div>
-
-                {testResult && (
-                  <div className="p-3 rounded-lg bg-slate-900 text-white font-mono text-xs">
-                    {testResult}
-                  </div>
-                )}
+                  </li>
+                  <li>Klik <strong>Save and Deploy</strong>. Dalam 1 menit, aplikasi rapor Anda akan langsung online dengan domain gratis seperti <code>erapor.pages.dev</code>.</li>
+                </ol>
               </div>
             </div>
           )}

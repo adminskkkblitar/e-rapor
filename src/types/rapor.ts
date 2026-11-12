@@ -31,13 +31,45 @@ export interface DataSiswa {
   fotoUrl?: string;
 }
 
+export type FaseKurikulum = 'Fase A' | 'Fase B' | 'Fase C';
+
+export interface ElemenCapaian {
+  elemen: string;
+  subElemen?: string;
+  deskripsiFaseA: string;
+  deskripsiFaseB: string;
+  deskripsiFaseC: string;
+}
+
+export interface FileAtpLampiran {
+  id: string;
+  fileName: string;
+  fileType: string;
+  fileSize?: string;
+  uploadedAt: string;
+  uploadedBy?: string;
+  catatan?: string;
+  dataUrl?: string;
+  rawText?: string;
+  tpExtracted?: string[];
+}
+
 export interface MasterKurikulumMapel {
   kodeMapel: string;
   namaMapel: string;
   kelompok: 'A' | 'B' | 'Muatan Lokal';
-  cp: string; // Capaian Pembelajaran
-  atp: string; // Alur Tujuan Pembelajaran
+  cp: string; // Capaian Pembelajaran aktif
+  atp: string; // Alur Tujuan Pembelajaran aktif
   tpNarasi: string[]; // 25 Teks Narasi TP (index 0 = TP_1, index 24 = TP_25)
+  faseAktif?: FaseKurikulum;
+  cpFaseA?: string;
+  cpFaseB?: string;
+  cpFaseC?: string;
+  atpFaseA?: string;
+  atpFaseB?: string;
+  atpFaseC?: string;
+  elemenCapaian?: ElemenCapaian[];
+  fileAtpLampiran?: FileAtpLampiran[];
 }
 
 export interface NilaiFormatifSiswa {
