@@ -25,7 +25,8 @@ const ENV_GAS_URL =
  * tanpa perlu mengatur ulang URL di menu Integrasi GAS.
  */
 export const DEFAULT_GAS_WEBAPP_URL =
-  ENV_GAS_URL || 'https://script.google.com/macros/s/AKfycbwSD_KalamKudus_Blitar_ERapor/exec';
+  ENV_GAS_URL ||
+  'https://script.google.com/macros/s/AKfycbyG2q3fn49EvHpwOZ2V17fbTiA-ZML2v7y_eGsdawdrMVtCQ_-eJTlujXxQ9cI6DJe-/exec';
 
 // Alias untuk kompatibilitas impor lama
 export const DEFAULT_DEMO_GAS_URL = DEFAULT_GAS_WEBAPP_URL;
@@ -41,7 +42,7 @@ export function isPlaceholderGasUrl(url?: string): boolean {
 export function getStoredGasUrl(): string {
   try {
     const custom = localStorage.getItem(GAS_URL_STORAGE_KEY);
-    if (custom && custom.trim()) {
+    if (custom && custom.trim() && custom.trim() !== PLACEHOLDER_GAS_URL) {
       return custom.trim();
     }
   } catch {
