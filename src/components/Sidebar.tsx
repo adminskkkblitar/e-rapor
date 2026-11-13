@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { DataSiswa, ProfilSekolah, UserSession } from '../types/rapor';
+import { getFaseFromKelas, normalizeKelasCode } from '../utils/raporCalculations';
 import {
   Award,
   BookOpen,
@@ -231,18 +232,30 @@ export const Sidebar: React.FC<SidebarProps> = ({
             <div>
               <div className="flex items-center justify-between text-[11px] font-bold text-slate-400 mb-1 px-1">
                 <span>SISWA TERPILIH:</span>
-                <span className="text-[10px] text-slate-500">{siswaList.length} Siswa</span>
+                <span className="text-[10px] text-slate-500">
+                  {userSession.role === 'wali_kelas'
+                    ? `Kelas ${normalizeKelasCode(userSession.kelasAjar || 'V')} • `
+                    : ''}
+                  {siswaList.length} Siswa
+                </span>
               </div>
               <select
                 value={selectedNis}
                 onChange={(e) => onSelectNis(e.target.value)}
-                className="w-full bg-slate-900 border border-slate-700 rounded-xl px-2.5 py-1.5 text-xs font-bold text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 cursor-pointer truncate"
+                disabled={siswaList.length === 0}
+                className="w-full bg-slate-900 border border-slate-700 rounded-xl px-2.5 py-1.5 text-xs font-bold text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 cursor-pointer truncate disabled:opacity-60"
               >
-                {siswaList.map((s) => (
-                  <option key={s.nis} value={s.nis} className="bg-slate-900 text-white">
-                    {s.nama} ({s.nisn || s.nis})
+                {siswaList.length > 0 ? (
+                  siswaList.map((s) => (
+                    <option key={s.nis} value={s.nis} className="bg-slate-900 text-white">
+                      {s.nama} ({s.kelas} • {s.nisn || s.nis})
+                    </option>
+                  ))
+                ) : (
+                  <option value="" className="bg-slate-900 text-slate-400">
+                    Belum ada siswa di kelas ini
                   </option>
-                ))}
+                )}
               </select>
             </div>
           </div>
@@ -420,7 +433,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                     {userSession.role === 'admin'
                       ? 'Administrator'
                       : userSession.role === 'wali_kelas'
-                      ? 'Wali Kelas V'
+                      ? `Wali Kelas ${normalizeKelasCode(userSession.kelasAjar || 'V')} (${getFaseFromKelas(userSession.kelasAjar || 'V')})`
                       : userSession.namaMapelAjar || userSession.kodeMapelAjar || 'Guru Mapel'}
                   </span>
                 </div>

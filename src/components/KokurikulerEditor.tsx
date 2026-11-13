@@ -308,6 +308,20 @@ export const KokurikulerEditor: React.FC<KokurikulerEditorProps> = ({
   // Selected Dimensi Definition for the Add form
   const selectedDimDef = DIMENSI_8_PROFIL_LULUSAN.find((d) => d.kode === selectedDimKode);
 
+  if (!activeSiswa) {
+    return (
+      <div className="bg-white rounded-xl p-10 text-center border border-slate-200 shadow-xs space-y-2">
+        <Users className="w-10 h-10 text-slate-300 mx-auto" />
+        <h3 className="text-sm font-bold text-slate-800">
+          Belum ada data peserta didik pada kelas ini
+        </h3>
+        <p className="text-xs text-slate-500">
+          Silakan tambahkan data siswa terlebih dahulu pada menu Data Siswa Lengkap.
+        </p>
+      </div>
+    );
+  }
+
   // Live Synthesized Preview
   const liveSynthesizedNarasi = sintesisNarasiKokurikuler(
     activeDimensiList,

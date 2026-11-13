@@ -1,7 +1,15 @@
-import React, { useState, useMemo } from 'react';
-import { DataSiswa } from '../types/rapor';
+import React, { useState, useMemo, useEffect } from 'react';
+import { DataSiswa, UserSession } from '../types/rapor';
+import {
+  TINGKAT_KELAS_SD,
+  getFaseDisplayForKelas,
+  getFaseFromKelas,
+  getKelasAngka,
+  normalizeKelasCode,
+} from '../utils/raporCalculations';
 import {
   AlertCircle,
+  BookOpen,
   Check,
   CheckCircle2,
   Download,
@@ -10,6 +18,7 @@ import {
   FileText,
   Filter,
   GraduationCap,
+  Lock,
   Plus,
   Printer,
   RefreshCw,
@@ -32,6 +41,8 @@ interface DataSiswaManagerProps {
   onUpdateSiswa: (siswa: DataSiswa) => void;
   onDeleteSiswa: (nis: string) => void;
   onNavigateToPrint: (nis: string, subTab: 'cover' | 'inti') => void;
+  onNavigateToNilai?: () => void;
+  userSession?: UserSession;
 }
 
 const DEFAULT_NEW_SISWA: DataSiswa = {
@@ -70,10 +81,20 @@ export const DataSiswaManager: React.FC<DataSiswaManagerProps> = ({
   onUpdateSiswa,
   onDeleteSiswa,
   onNavigateToPrint,
+  onNavigateToNilai,
+  userSession,
 }) => {
+  const isWaliKelasLocked =
+    userSession?.role === 'wali_kelas' && Boolean(userSession.kelasAjar);
+  const lockedKelas = isWaliKelasLocked
+    ? normalizeKelasCode(userSession?.kelasAjar)
+    : undefined;
+
   // State
   const [searchQuery, setSearchQuery] = useState<string>('');
-  const [selectedKelasFilter, setSelectedKelasFilter] = useState<string>('Semua');
+  const [selectedKelasFilter, setSelectedKelasFilter] = useState<string>(
+    lockedKelas || 'Semua'
+  );
   const [isManualModalOpen, setIsManualModalOpen] = useState<boolean>(false);
   const [isBulkModalOpen, setIsBulkModalOpen] = useState<boolean>(false);
   const [editingSiswa, setEditingSiswa] = useState<DataSiswa | null>(null);
@@ -86,8 +107,20 @@ export const DataSiswaManager: React.FC<DataSiswaManagerProps> = ({
   const [bulkInputText, setBulkInputText] = useState<string>('');
   const [bulkParsed, setBulkParsed] = useState<DataSiswa[]>([]);
   const [bulkError, setBulkError] = useState<string>('');
-  const [bulkTargetKelas, setBulkTargetKelas] = useState<string>('V');
-  const [bulkTargetFase, setBulkTargetFase] = useState<string>('Fase C (Kelas V)');
+  const [bulkTargetKelas, setBulkTargetKelas] = useState<string>(lockedKelas || 'V');
+  const [bulkTargetFase, setBulkTargetFase] = useState<string>(
+    getFaseDisplayForKelas(lockedKelas || 'V')
+  );
+
+  useEffect(() => {
+    if (lockedKelas) {
+      setSelectedKelasFilter(lockedKelas);
+      setBulkTargetKelas(lockedKelas);
+      setBulkTargetFase(getFaseDisplayForKelas(lockedKelas));
+    } else {
+      setSelectedKelasFilter('Semua');
+    }
+  }, [lockedKelas]);
 
   // Ambil daftar kelas unik dari data siswa
   const availableKelasList = useMemo(() => {
@@ -99,14 +132,17 @@ export const DataSiswaManager: React.FC<DataSiswaManagerProps> = ({
   // Filter siswa berdasarkan kelas & pencarian
   const filteredSiswa = useMemo(() => {
     return siswaList.filter((s) => {
-      const matchKelas = selectedKelasFilter === 'Semua' || s.kelas === selectedKelasFilter;
+      const effectiveFilter = lockedKelas || selectedKelasFilter;
+      const matchKelas =
+        effectiveFilter === 'Semua' ||
+        normalizeKelasCode(s.kelas) === normalizeKelasCode(effectiveFilter);
       const matchSearch =
         s.nama.toLowerCase().includes(searchQuery.toLowerCase()) ||
         s.nis.includes(searchQuery) ||
         s.nisn.includes(searchQuery);
       return matchKelas && matchSearch;
     });
-  }, [siswaList, selectedKelasFilter, searchQuery]);
+  }, [siswaList, selectedKelasFilter, searchQuery, lockedKelas]);
 
   // Statistik
   const countL = filteredSiswa.filter((s) => s.jenisKelamin === 'L').length;
@@ -115,10 +151,12 @@ export const DataSiswaManager: React.FC<DataSiswaManagerProps> = ({
   // Buka Form Manual untuk Tambah Siswa Baru
   const handleOpenAddManual = () => {
     setEditingSiswa(null);
+    const defaultKelas =
+      lockedKelas || (selectedKelasFilter === 'Semua' ? 'V' : selectedKelasFilter);
     setFormData({
       ...DEFAULT_NEW_SISWA,
-      kelas: selectedKelasFilter === 'Semua' ? 'V' : selectedKelasFilter,
-      fase: selectedKelasFilter === 'IV' ? 'Fase B (Kelas IV)' : 'Fase C (Kelas V)',
+      kelas: defaultKelas,
+      fase: getFaseDisplayForKelas(defaultKelas),
     });
     setFormError('');
     setIsManualModalOpen(true);
@@ -295,8 +333,10 @@ export const DataSiswaManager: React.FC<DataSiswaManagerProps> = ({
       const nis = clean[0] || `2301${siswaList.length + parsed.length + 10}`;
       const nisn = clean[1] || '-';
       const nama = clean[2] || clean[1] || 'Siswa Baru';
-      const kelas = clean[3] || bulkTargetKelas;
-      const fase = clean[4] || bulkTargetFase;
+      const kelas = lockedKelas || clean[3] || bulkTargetKelas;
+      const fase = lockedKelas
+        ? getFaseDisplayForKelas(lockedKelas)
+        : clean[4] || getFaseDisplayForKelas(kelas);
       const tempatLahir = clean[5] || 'Blitar';
       const tanggalLahir = clean[6] || '1 Januari 2014';
       const jenisKelamin = clean[7]?.toUpperCase() === 'P' ? 'P' : 'L';
@@ -388,8 +428,19 @@ export const DataSiswaManager: React.FC<DataSiswaManagerProps> = ({
             </p>
           </div>
 
-          {/* Action Buttons: Tambah Manual & Massal */}
+          {/* Action Buttons: Pengisian Rapor, Tambah Manual & Massal */}
           <div className="flex flex-wrap items-center gap-2.5">
+            {onNavigateToNilai && (
+              <button
+                type="button"
+                onClick={onNavigateToNilai}
+                className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold flex items-center gap-2 shadow-sm shadow-emerald-600/20 transition"
+              >
+                <BookOpen className="w-4 h-4" />
+                Pengisian Nilai & Rapor {lockedKelas ? `Kelas ${lockedKelas}` : ''}
+              </button>
+            )}
+
             <button
               type="button"
               onClick={handleOpenAddManual}
@@ -417,38 +468,47 @@ export const DataSiswaManager: React.FC<DataSiswaManagerProps> = ({
 
         {/* 2. STATS & FILTER BAR */}
         <div className="pt-4 flex flex-col md:flex-row md:items-center justify-between gap-4">
-          {/* Filter Kelas */}
-          <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-xs font-bold text-slate-500 flex items-center gap-1.5 mr-1">
-              <Filter className="w-3.5 h-3.5" />
-              Filter Kelas:
-            </span>
-            <button
-              type="button"
-              onClick={() => setSelectedKelasFilter('Semua')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition ${
-                selectedKelasFilter === 'Semua'
-                  ? 'bg-indigo-600 text-white shadow-2xs'
-                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-              }`}
-            >
-              Semua ({siswaList.length})
-            </button>
-            {availableKelasList.map((k) => (
+          {/* Filter Kelas (Locked if Wali Kelas) */}
+          {lockedKelas ? (
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-indigo-50 text-indigo-900 border border-indigo-200">
+                <Lock className="w-3.5 h-3.5 text-indigo-600" />
+                Akses Kelas Terkunci: Kelas {lockedKelas} ({getKelasAngka(lockedKelas)}) • {getFaseFromKelas(lockedKelas)} ({filteredSiswa.length} Siswa)
+              </span>
+            </div>
+          ) : (
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-xs font-bold text-slate-500 flex items-center gap-1.5 mr-1">
+                <Filter className="w-3.5 h-3.5" />
+                Filter Kelas:
+              </span>
               <button
-                key={k}
                 type="button"
-                onClick={() => setSelectedKelasFilter(k)}
+                onClick={() => setSelectedKelasFilter('Semua')}
                 className={`px-3 py-1.5 rounded-lg text-xs font-bold transition ${
-                  selectedKelasFilter === k
+                  selectedKelasFilter === 'Semua'
                     ? 'bg-indigo-600 text-white shadow-2xs'
                     : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
                 }`}
               >
-                Kelas {k} ({siswaList.filter((s) => s.kelas === k).length})
+                Semua ({siswaList.length})
               </button>
-            ))}
-          </div>
+              {availableKelasList.map((k) => (
+                <button
+                  key={k}
+                  type="button"
+                  onClick={() => setSelectedKelasFilter(k)}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition ${
+                    selectedKelasFilter === k
+                      ? 'bg-indigo-600 text-white shadow-2xs'
+                      : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                  }`}
+                >
+                  Kelas {k} ({siswaList.filter((s) => s.kelas === k).length})
+                </button>
+              ))}
+            </div>
+          )}
 
           {/* Search Box & Quick Stats */}
           <div className="flex items-center gap-3">
@@ -700,14 +760,31 @@ export const DataSiswaManager: React.FC<DataSiswaManagerProps> = ({
 
                   <div className="grid grid-cols-2 gap-2">
                     <div>
-                      <label className="font-bold text-slate-700 block mb-1">Kelas</label>
-                      <input
-                        type="text"
-                        value={formData.kelas}
-                        onChange={(e) => setFormData({ ...formData, kelas: e.target.value })}
-                        placeholder="V"
-                        className="w-full p-2.5 bg-slate-50 border border-slate-300 rounded-xl font-bold text-center focus:ring-2 focus:ring-indigo-500 focus:outline-none"
-                      />
+                      <label className="font-bold text-slate-700 block mb-1 flex items-center gap-1">
+                        Kelas
+                        {lockedKelas && <Lock className="w-3 h-3 text-indigo-600" />}
+                      </label>
+                      <select
+                        value={lockedKelas || normalizeKelasCode(formData.kelas)}
+                        disabled={Boolean(lockedKelas)}
+                        onChange={(e) => {
+                          const newKelas = e.target.value;
+                          setFormData({
+                            ...formData,
+                            kelas: newKelas,
+                            fase: getFaseDisplayForKelas(newKelas),
+                          });
+                        }}
+                        className={`w-full p-2.5 border border-slate-300 rounded-xl font-bold text-center focus:ring-2 focus:ring-indigo-500 focus:outline-none ${
+                          lockedKelas ? 'bg-slate-100 text-slate-600 cursor-not-allowed' : 'bg-slate-50'
+                        }`}
+                      >
+                        {TINGKAT_KELAS_SD.map((k) => (
+                          <option key={k.kode} value={k.kode}>
+                            {k.label}
+                          </option>
+                        ))}
+                      </select>
                     </div>
                     <div>
                       <label className="font-bold text-slate-700 block mb-1">Jenis Kelamin</label>
@@ -765,9 +842,8 @@ export const DataSiswaManager: React.FC<DataSiswaManagerProps> = ({
                     <input
                       type="text"
                       value={formData.fase}
-                      onChange={(e) => setFormData({ ...formData, fase: e.target.value })}
-                      placeholder="Fase C (Kelas V)"
-                      className="w-full p-2.5 bg-slate-50 border border-slate-300 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+                      readOnly
+                      className="w-full p-2.5 bg-slate-100 text-slate-700 border border-slate-300 rounded-xl font-semibold focus:outline-none"
                     />
                   </div>
 
@@ -1014,16 +1090,28 @@ export const DataSiswaManager: React.FC<DataSiswaManagerProps> = ({
                 </div>
 
                 <div>
-                  <label className="text-xs font-bold text-slate-700 block mb-1">
+                  <label className="text-xs font-bold text-slate-700 block mb-1 flex items-center gap-1">
                     Kelas Default:
+                    {lockedKelas && <Lock className="w-3 h-3 text-indigo-600" />}
                   </label>
-                  <input
-                    type="text"
-                    value={bulkTargetKelas}
-                    onChange={(e) => setBulkTargetKelas(e.target.value)}
-                    placeholder="V"
-                    className="w-full text-xs p-2.5 bg-slate-50 border border-slate-300 rounded-xl font-bold text-center focus:outline-none focus:ring-1 focus:ring-indigo-500"
-                  />
+                  <select
+                    value={lockedKelas || bulkTargetKelas}
+                    disabled={Boolean(lockedKelas)}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setBulkTargetKelas(val);
+                      setBulkTargetFase(getFaseDisplayForKelas(val));
+                    }}
+                    className={`w-full text-xs p-2.5 border border-slate-300 rounded-xl font-bold text-center focus:outline-none focus:ring-1 focus:ring-indigo-500 ${
+                      lockedKelas ? 'bg-slate-100 text-slate-600 cursor-not-allowed' : 'bg-slate-50'
+                    }`}
+                  >
+                    {TINGKAT_KELAS_SD.map((k) => (
+                      <option key={k.kode} value={k.kode}>
+                        {k.label} ({k.fase})
+                      </option>
+                    ))}
+                  </select>
                 </div>
               </div>
 

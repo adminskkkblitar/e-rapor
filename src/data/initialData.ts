@@ -22,12 +22,58 @@ export const INITIAL_USERS: UserAccount[] = [
     email: 'kepala.sekolah@kalamkudusblitar.sch.id',
   },
   {
+    id: 'user-wali-1',
+    nama: 'Lidia Kusumawardani, S.Pd',
+    nip: '-',
+    role: 'wali_kelas',
+    kelasAjar: 'I',
+    password: 'wali123',
+    email: 'walikelas1@kalamkudusblitar.sch.id',
+  },
+  {
+    id: 'user-wali-2',
+    nama: 'Maria Magdalena Sari, S.Pd',
+    nip: '-',
+    role: 'wali_kelas',
+    kelasAjar: 'II',
+    password: 'wali123',
+    email: 'walikelas2@kalamkudusblitar.sch.id',
+  },
+  {
+    id: 'user-wali-3',
+    nama: 'Yohanes Krisostomus, S.Pd',
+    nip: '-',
+    role: 'wali_kelas',
+    kelasAjar: 'III',
+    password: 'wali123',
+    email: 'walikelas3@kalamkudusblitar.sch.id',
+  },
+  {
+    id: 'user-wali-4',
+    nama: 'Esterina Puspitasari, S.Pd',
+    nip: '-',
+    role: 'wali_kelas',
+    kelasAjar: 'IV',
+    password: 'wali123',
+    email: 'walikelas4@kalamkudusblitar.sch.id',
+  },
+  {
     id: 'user-wali',
     nama: 'Petrus Apriprasetyo, S.Pd',
     nip: '-',
     role: 'wali_kelas',
+    kelasAjar: 'V',
     password: 'wali123',
     email: 'petrusapriprasetyo54@guru.sd.belajar.id',
+  },
+  {
+    id: 'user-wali-6',
+    nama: 'Daniel Kurniawan, S.Pd',
+    nip: '-',
+    role: 'wali_kelas',
+    kelasAjar: 'VI',
+    password: 'wali123',
+    email: 'walikelas6@kalamkudusblitar.sch.id',
   },
   {
     id: 'user-pak',
@@ -101,6 +147,58 @@ export const INITIAL_PROFIL_SEKOLAH: ProfilSekolah = {
   nipKepalaSekolah: '-',
   namaWaliKelas: 'Petrus Apriprasetyo, S.Pd',
   nipWaliKelas: '-',
+  waliKelasPerTingkat: {
+    I: { nama: 'Lidia Kusumawardani, S.Pd', nip: '-' },
+    II: { nama: 'Maria Magdalena Sari, S.Pd', nip: '-' },
+    III: { nama: 'Yohanes Krisostomus, S.Pd', nip: '-' },
+    IV: { nama: 'Esterina Puspitasari, S.Pd', nip: '-' },
+    V: { nama: 'Petrus Apriprasetyo, S.Pd', nip: '-' },
+    VI: { nama: 'Daniel Kurniawan, S.Pd', nip: '-' },
+  },
+  guruMapelList: [
+    {
+      id: 'user-pak',
+      kodeMapel: 'PAK-01',
+      namaMapel: 'Pendidikan Agama Kristen & Budi Pekerti',
+      nama: 'Budi Hartono, S.Th',
+      nip: '-',
+    },
+    {
+      id: 'user-pjok',
+      kodeMapel: 'PJOK-07',
+      namaMapel: 'Pendidikan Jasmani dan Olahraga',
+      nama: 'Wahyu Hidayat, S.Pd',
+      nip: '-',
+    },
+    {
+      id: 'user-bing',
+      kodeMapel: 'BING-08',
+      namaMapel: 'Bahasa Inggris',
+      nama: 'Sarah Wijaya, S.Pd',
+      nip: '-',
+    },
+    {
+      id: 'user-sb',
+      kodeMapel: 'SB-06',
+      namaMapel: 'Seni Musik',
+      nama: 'Grace Melati, S.Sn',
+      nip: '-',
+    },
+    {
+      id: 'user-bj',
+      kodeMapel: 'BJ-09',
+      namaMapel: 'Bahasa Jawa',
+      nama: 'Siti Rahayu, S.Pd',
+      nip: '-',
+    },
+    {
+      id: 'user-komp',
+      kodeMapel: 'KOMP-10',
+      namaMapel: 'Komputer',
+      nama: 'Rizky Pratama, S.Kom',
+      nip: '-',
+    },
+  ],
   titimangsaTempat: 'Blitar',
   titimangsaTanggal: '20 Desember 2025',
   tahunPelajaran: '2025/2026',
@@ -284,6 +382,136 @@ export const INITIAL_SISWA: DataSiswa[] = [
     alamatWali: '-',
     telepon: '081234567896',
   },
+  {
+    nis: '250101',
+    nisn: '0181234001',
+    nama: 'NATHANAEL KRISTIAN PUTRA',
+    namaPanggilan: 'Nathan',
+    kelas: 'I',
+    fase: 'Fase A (Kelas I)',
+    tempatLahir: 'Blitar',
+    tanggalLahir: '10 April 2018',
+    jenisKelamin: 'L',
+    agama: 'Kristen Protestan',
+    alamat: 'Dsn. Tambak, RT 01/RW 01, Pagergunung, Kesamben',
+    namaAyah: 'KRISTIAN ADI',
+    namaIbu: 'DEWI SARTIKA',
+    pekerjaanAyah: 'WIRASWASTA',
+    pekerjaanIbu: 'IBU RUMAH TANGGA',
+    alamatOrtuJalan: 'Dsn. Tambak RT 01/RW 01',
+    alamatOrtuKelurahan: 'Pagergunung',
+    alamatOrtuKecamatan: 'Kesamben',
+    alamatOrtuKota: 'Kab. Blitar',
+    alamatOrtuProvinsi: 'Jawa Timur',
+    namaWali: '-',
+    pekerjaanWali: '-',
+    alamatWali: '-',
+    telepon: '081234567801',
+  },
+  {
+    nis: '250102',
+    nisn: '0181234002',
+    nama: 'ELISABETH GLORIA SANTOSO',
+    namaPanggilan: 'Elisa',
+    kelas: 'I',
+    fase: 'Fase A (Kelas I)',
+    tempatLahir: 'Blitar',
+    tanggalLahir: '22 Juni 2018',
+    jenisKelamin: 'P',
+    agama: 'Kristen Protestan',
+    alamat: 'Jl. Diponegoro No. 5, Kesamben, Blitar',
+    namaAyah: 'BUDI SANTOSO',
+    namaIbu: 'YOHANA RINI',
+    pekerjaanAyah: 'KARYAWAN SWASTA',
+    pekerjaanIbu: 'WIRASWASTA',
+    alamatOrtuJalan: 'Jl. Diponegoro No. 5',
+    alamatOrtuKelurahan: 'Kesamben',
+    alamatOrtuKecamatan: 'Kesamben',
+    alamatOrtuKota: 'Kab. Blitar',
+    alamatOrtuProvinsi: 'Jawa Timur',
+    namaWali: '-',
+    pekerjaanWali: '-',
+    alamatWali: '-',
+    telepon: '081234567802',
+  },
+  {
+    nis: '240201',
+    nisn: '0172345001',
+    nama: 'YEHEZKIEL PRATAMA WIJAYA',
+    namaPanggilan: 'Kiel',
+    kelas: 'II',
+    fase: 'Fase A (Kelas II)',
+    tempatLahir: 'Blitar',
+    tanggalLahir: '03 Maret 2017',
+    jenisKelamin: 'L',
+    agama: 'Kristen Protestan',
+    alamat: 'Dsn. Krajan RT 02/RW 01, Pagergunung, Kesamben',
+    namaAyah: 'ANDREAS WIJAYA',
+    namaIbu: 'MARIA SUSANTI',
+    pekerjaanAyah: 'PETANI',
+    pekerjaanIbu: 'IBU RUMAH TANGGA',
+    alamatOrtuJalan: 'Dsn. Krajan RT 02/RW 01',
+    alamatOrtuKelurahan: 'Pagergunung',
+    alamatOrtuKecamatan: 'Kesamben',
+    alamatOrtuKota: 'Kab. Blitar',
+    alamatOrtuProvinsi: 'Jawa Timur',
+    namaWali: '-',
+    pekerjaanWali: '-',
+    alamatWali: '-',
+    telepon: '081234567803',
+  },
+  {
+    nis: '230301',
+    nisn: '0163456001',
+    nama: 'TABITHA GRACELLA HALIM',
+    namaPanggilan: 'Tabitha',
+    kelas: 'III',
+    fase: 'Fase B (Kelas III)',
+    tempatLahir: 'Blitar',
+    tanggalLahir: '19 November 2016',
+    jenisKelamin: 'P',
+    agama: 'Kristen Protestan',
+    alamat: 'Jl. Panglima Sudirman No. 21, Kesamben, Blitar',
+    namaAyah: 'HENDRI HALIM',
+    namaIbu: 'RATNA DEWI',
+    pekerjaanAyah: 'PEDAGANG',
+    pekerjaanIbu: 'PEDAGANG',
+    alamatOrtuJalan: 'Jl. Panglima Sudirman No. 21',
+    alamatOrtuKelurahan: 'Kesamben',
+    alamatOrtuKecamatan: 'Kesamben',
+    alamatOrtuKota: 'Kab. Blitar',
+    alamatOrtuProvinsi: 'Jawa Timur',
+    namaWali: '-',
+    pekerjaanWali: '-',
+    alamatWali: '-',
+    telepon: '081234567804',
+  },
+  {
+    nis: '210601',
+    nisn: '0136789001',
+    nama: 'GIDEON IMMANUEL TANOTO',
+    namaPanggilan: 'Gideon',
+    kelas: 'VI',
+    fase: 'Fase C (Kelas VI)',
+    tempatLahir: 'Blitar',
+    tanggalLahir: '08 Agustus 2013',
+    jenisKelamin: 'L',
+    agama: 'Kristen Protestan',
+    alamat: 'Dsn. Sumberarum RT 02/RW 04, Kesamben, Blitar',
+    namaAyah: 'LUKAS TANOTO',
+    namaIbu: 'DEBORA LESTARI',
+    pekerjaanAyah: 'WIRASWASTA',
+    pekerjaanIbu: 'GURU',
+    alamatOrtuJalan: 'Dsn. Sumberarum RT 02/RW 04',
+    alamatOrtuKelurahan: 'Pagergunung',
+    alamatOrtuKecamatan: 'Kesamben',
+    alamatOrtuKota: 'Kab. Blitar',
+    alamatOrtuProvinsi: 'Jawa Timur',
+    namaWali: '-',
+    pekerjaanWali: '-',
+    alamatWali: '-',
+    telepon: '081234567805',
+  },
 ];
 
 function buat25Tp(subjekSingkat: string, topik: string[], explicitTp1And2?: [string, string]): string[] {
@@ -450,6 +678,49 @@ const RAW_KURIKULUM: MasterKurikulumMapel[] = [
   },
 ];
 
+function buat25TpDariFase(
+  atpText: string,
+  elemenList: { elemen: string; deskripsiFaseA: string; deskripsiFaseB: string; deskripsiFaseC: string }[],
+  fase: 'Fase A' | 'Fase B',
+  preserveTp1And2?: string[]
+): string[] {
+  const clauses: string[] = [];
+
+  // Extract meaningful short phrases from ATP and elemenCapaian for this Fase
+  atpText
+    .split(/[.;]+/)
+    .map((s) => s.trim())
+    .filter((s) => s.length > 8)
+    .forEach((part) => {
+      part
+        .split(/,\s*(?:serta\s+)?/i)
+        .map((sub) => sub.trim().replace(/^serta\s+/i, '').replace(/^dan\s+/i, ''))
+        .filter((sub) => sub.length > 8)
+        .forEach((c) => clauses.push(c.charAt(0).toLowerCase() + c.slice(1)));
+    });
+
+  elemenList.forEach((el) => {
+    const rawDesc = fase === 'Fase A' ? el.deskripsiFaseA : el.deskripsiFaseB;
+    rawDesc
+      .split(/[.;]+/)
+      .map((s) => s.trim())
+      .filter((s) => s.length > 10)
+      .forEach((c) => clauses.push(c.charAt(0).toLowerCase() + c.slice(1)));
+  });
+
+  const safeClauses = clauses.length > 0 ? clauses : ['memahami capaian pembelajaran pada fase ini'];
+  const result: string[] = [];
+
+  for (let i = 0; i < 25; i++) {
+    if (fase === 'Fase B' && preserveTp1And2 && i < 2 && preserveTp1And2[i]) {
+      result.push(preserveTp1And2[i]);
+    } else {
+      result.push(safeClauses[i % safeClauses.length]);
+    }
+  }
+  return result;
+}
+
 export const INITIAL_KURIKULUM: MasterKurikulumMapel[] = RAW_KURIKULUM.map((mapel) => {
   const detail = DATA_CP_BKPDM_2026[mapel.kodeMapel];
   if (!detail) return mapel;
@@ -462,6 +733,14 @@ export const INITIAL_KURIKULUM: MasterKurikulumMapel[] = RAW_KURIKULUM.map((mape
     atpFaseA: detail.atpFaseA,
     atpFaseB: detail.atpFaseB,
     atpFaseC: detail.atpFaseC,
+    tpNarasiFaseA: buat25TpDariFase(detail.atpFaseA, detail.elemenCapaian, 'Fase A'),
+    tpNarasiFaseB: buat25TpDariFase(
+      detail.atpFaseB,
+      detail.elemenCapaian,
+      'Fase B',
+      mapel.tpNarasi.slice(0, 2)
+    ),
+    tpNarasiFaseC: mapel.tpNarasi,
     elemenCapaian: detail.elemenCapaian,
     fileAtpLampiran: detail.fileAtpLampiran,
   };
@@ -822,4 +1101,9 @@ export const INITIAL_ABSENSI: AbsensiSiswa[] = [
   { nis: '230105', semester: 2, sakit: 3, izin: 2, tanpaKeterangan: 1 },
   { nis: '230106', semester: 2, sakit: 0, izin: 1, tanpaKeterangan: 0 },
   { nis: '230107', semester: 2, sakit: 4, izin: 0, tanpaKeterangan: 0 },
+  { nis: '250101', semester: 2, sakit: 1, izin: 0, tanpaKeterangan: 0 },
+  { nis: '250102', semester: 2, sakit: 0, izin: 1, tanpaKeterangan: 0 },
+  { nis: '240201', semester: 2, sakit: 1, izin: 1, tanpaKeterangan: 0 },
+  { nis: '230301', semester: 2, sakit: 0, izin: 0, tanpaKeterangan: 0 },
+  { nis: '210601', semester: 2, sakit: 0, izin: 0, tanpaKeterangan: 0 },
 ];

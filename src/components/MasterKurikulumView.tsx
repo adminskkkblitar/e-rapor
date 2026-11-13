@@ -1,5 +1,6 @@
-import React, { useState, useRef } from 'react';
-import { MasterKurikulumMapel, FaseKurikulum, FileAtpLampiran } from '../types/rapor';
+import React, { useState, useRef, useEffect } from 'react';
+import { MasterKurikulumMapel, FaseKurikulum, FileAtpLampiran, UserSession } from '../types/rapor';
+import { getFaseFromKelas, getTpNarasiForFase, normalizeKelasCode } from '../utils/raporCalculations';
 import {
   BookOpen,
   ChevronRight,
@@ -7,6 +8,7 @@ import {
   FileSpreadsheet,
   FileText,
   Layers,
+  Lock,
   Upload,
   CheckCircle2,
   ExternalLink,
@@ -22,19 +24,44 @@ import * as XLSX from 'xlsx';
 interface MasterKurikulumViewProps {
   kurikulum: MasterKurikulumMapel[];
   onUpdateMapel: (updatedMapel: MasterKurikulumMapel) => void;
+  userSession?: UserSession;
 }
 
 export const MasterKurikulumView: React.FC<MasterKurikulumViewProps> = ({
   kurikulum,
   onUpdateMapel,
+  userSession,
 }) => {
-  const [selectedKode, setSelectedKode] = useState<string>(kurikulum[0]?.kodeMapel || '');
+  const isWaliKelasLocked =
+    userSession?.role === 'wali_kelas' && Boolean(userSession.kelasAjar);
+  const lockedFase: FaseKurikulum | undefined = isWaliKelasLocked
+    ? getFaseFromKelas(userSession?.kelasAjar)
+    : undefined;
+
+  const isGuruMapelLocked =
+    userSession?.role === 'guru_mapel' && Boolean(userSession.kodeMapelAjar);
+
+  const [selectedKode, setSelectedKode] = useState<string>(
+    (isGuruMapelLocked ? userSession?.kodeMapelAjar : undefined) || kurikulum[0]?.kodeMapel || ''
+  );
   const activeMapel = kurikulum.find((m) => m.kodeMapel === selectedKode) || kurikulum[0];
 
   // Fase view switcher
   const [activeFaseTab, setActiveFaseTab] = useState<FaseKurikulum>(
-    activeMapel?.faseAktif || 'Fase C'
+    lockedFase || activeMapel?.faseAktif || 'Fase C'
   );
+
+  useEffect(() => {
+    if (lockedFase) {
+      setActiveFaseTab(lockedFase);
+    }
+  }, [lockedFase]);
+
+  useEffect(() => {
+    if (isGuruMapelLocked && userSession?.kodeMapelAjar) {
+      setSelectedKode(userSession.kodeMapelAjar);
+    }
+  }, [isGuruMapelLocked, userSession?.kodeMapelAjar]);
 
   // Sub-tabs: 'cp_elemen' | 'tp_list' | 'upload_atp'
   const [activeSection, setActiveSection] = useState<'cp_elemen' | 'tp_list' | 'upload_atp'>('cp_elemen');
@@ -45,14 +72,19 @@ export const MasterKurikulumView: React.FC<MasterKurikulumViewProps> = ({
   const [uploadStatus, setUploadStatus] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Handle TP text change
+  const currentFaseTpList = getTpNarasiForFase(activeMapel, activeFaseTab);
+
+  // Handle TP text change for active Fase
   const handleTpChange = (index: number, newText: string) => {
-    const updatedTp = [...activeMapel.tpNarasi];
+    const updatedTp = [...currentFaseTpList];
     updatedTp[index] = newText;
-    onUpdateMapel({
-      ...activeMapel,
-      tpNarasi: updatedTp,
-    });
+    if (activeFaseTab === 'Fase A') {
+      onUpdateMapel({ ...activeMapel, tpNarasiFaseA: updatedTp });
+    } else if (activeFaseTab === 'Fase B') {
+      onUpdateMapel({ ...activeMapel, tpNarasiFaseB: updatedTp });
+    } else {
+      onUpdateMapel({ ...activeMapel, tpNarasiFaseC: updatedTp, tpNarasi: updatedTp });
+    }
   };
 
   // Get CP and ATP text for currently selected Fase tab
@@ -90,6 +122,7 @@ export const MasterKurikulumView: React.FC<MasterKurikulumViewProps> = ({
 
   // Set default active Fase
   const handleSetActiveFase = (fase: FaseKurikulum) => {
+    if (lockedFase && fase !== lockedFase) return;
     setActiveFaseTab(fase);
     const cpText = fase === 'Fase A' ? activeMapel.cpFaseA : fase === 'Fase B' ? activeMapel.cpFaseB : activeMapel.cpFaseC;
     const atpText = fase === 'Fase A' ? activeMapel.atpFaseA : fase === 'Fase B' ? activeMapel.atpFaseB : activeMapel.atpFaseC;
@@ -179,21 +212,24 @@ export const MasterKurikulumView: React.FC<MasterKurikulumViewProps> = ({
     }
   };
 
-  // Apply parsed TPs to activeMapel.tpNarasi
+  // Apply parsed TPs to active Fase TP list
   const handleApplyExtractedTp = () => {
     if (parsedPreviewTp.length === 0) return;
-    const newTpNarasi = [...activeMapel.tpNarasi];
+    const newTpNarasi = [...currentFaseTpList];
     parsedPreviewTp.forEach((tp, idx) => {
       if (idx < 25) {
         newTpNarasi[idx] = tp;
       }
     });
 
-    onUpdateMapel({
-      ...activeMapel,
-      tpNarasi: newTpNarasi,
-    });
-    setUploadStatus(`Berhasil menerapkan ${parsedPreviewTp.length} TP ke dalam Master Kurikulum mapel ${activeMapel.namaMapel}!`);
+    if (activeFaseTab === 'Fase A') {
+      onUpdateMapel({ ...activeMapel, tpNarasiFaseA: newTpNarasi });
+    } else if (activeFaseTab === 'Fase B') {
+      onUpdateMapel({ ...activeMapel, tpNarasiFaseB: newTpNarasi });
+    } else {
+      onUpdateMapel({ ...activeMapel, tpNarasiFaseC: newTpNarasi, tpNarasi: newTpNarasi });
+    }
+    setUploadStatus(`Berhasil menerapkan ${parsedPreviewTp.length} TP (${activeFaseTab}) ke dalam Master Kurikulum mapel ${activeMapel.namaMapel}!`);
     setParsedPreviewTp([]);
   };
 
@@ -210,19 +246,19 @@ export const MasterKurikulumView: React.FC<MasterKurikulumViewProps> = ({
   const handleDownloadCsvTemplate = () => {
     const csvRows = [
       'No,Kode_TP,Teks_Tujuan_Pembelajaran',
-      ...activeMapel.tpNarasi.map((tp, idx) => `${idx + 1},TP_${idx + 1},"${tp.replace(/"/g, '""')}"`),
+      ...currentFaseTpList.map((tp, idx) => `${idx + 1},TP_${idx + 1},"${tp.replace(/"/g, '""')}"`),
     ];
     const csvContent = 'data:text/csv;charset=utf-8,\uFEFF' + encodeURI(csvRows.join('\n'));
     const link = document.createElement('a');
     link.setAttribute('href', csvContent);
-    link.setAttribute('download', `Template_TP_${activeMapel.kodeMapel}_${activeMapel.namaMapel.replace(/\s+/g, '_')}.csv`);
+    link.setAttribute('download', `Template_TP_${activeMapel.kodeMapel}_${activeFaseTab.replace(/\s+/g, '_')}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
   };
 
   // Filled TP count
-  const filledTpCount = activeMapel.tpNarasi.filter((t) => t && t.trim().length > 0).length;
+  const filledTpCount = currentFaseTpList.filter((t) => t && t.trim().length > 0).length;
 
   return (
     <div className="space-y-6">
@@ -252,8 +288,11 @@ export const MasterKurikulumView: React.FC<MasterKurikulumViewProps> = ({
               <span className="text-xs font-semibold text-slate-500 whitespace-nowrap">Pilih Mapel:</span>
               <select
                 value={selectedKode}
+                disabled={isGuruMapelLocked}
                 onChange={(e) => setSelectedKode(e.target.value)}
-                className="bg-slate-50 border border-slate-300 rounded-lg px-3 py-2 text-sm font-bold text-indigo-950 focus:ring-2 focus:ring-indigo-500"
+                className={`border border-slate-300 rounded-lg px-3 py-2 text-sm font-bold text-indigo-950 focus:ring-2 focus:ring-indigo-500 ${
+                  isGuruMapelLocked ? 'bg-slate-100 cursor-not-allowed' : 'bg-slate-50'
+                }`}
               >
                 {kurikulum.map((m) => (
                   <option key={m.kodeMapel} value={m.kodeMapel}>
@@ -278,7 +317,7 @@ export const MasterKurikulumView: React.FC<MasterKurikulumViewProps> = ({
 
         {/* Phase Selector Bar */}
         <div className="mt-5 pt-4 border-t border-slate-100 flex flex-col md:flex-row md:items-center justify-between gap-3">
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <span className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1">
               <Layers className="w-4 h-4 text-indigo-600" />
               Pilih Fase SD:
@@ -286,18 +325,23 @@ export const MasterKurikulumView: React.FC<MasterKurikulumViewProps> = ({
             <div className="inline-flex p-1 bg-slate-100 rounded-lg">
               {(['Fase A', 'Fase B', 'Fase C'] as FaseKurikulum[]).map((fase) => {
                 const isSelected = activeFaseTab === fase;
-                const isCurrentActive = activeMapel.faseAktif === fase;
+                const isDisabled = Boolean(lockedFase && lockedFase !== fase);
+                const isCurrentActive = (lockedFase || activeMapel.faseAktif) === fase;
                 return (
                   <button
                     key={fase}
                     type="button"
+                    disabled={isDisabled}
                     onClick={() => handleSetActiveFase(fase)}
                     className={`px-3 py-1.5 text-xs font-bold rounded-md transition flex items-center gap-1.5 ${
                       isSelected
                         ? 'bg-white text-indigo-900 shadow-xs border border-slate-200'
+                        : isDisabled
+                        ? 'text-slate-400 cursor-not-allowed opacity-60'
                         : 'text-slate-600 hover:text-slate-900'
                     }`}
                   >
+                    {isDisabled && <Lock className="w-3 h-3 text-slate-400" />}
                     <span>{fase}</span>
                     <span className="text-[10px] font-normal opacity-75">
                       {fase === 'Fase A' ? '(Kelas I-II)' : fase === 'Fase B' ? '(Kelas III-IV)' : '(Kelas V-VI)'}
@@ -309,6 +353,12 @@ export const MasterKurikulumView: React.FC<MasterKurikulumViewProps> = ({
                 );
               })}
             </div>
+            {lockedFase && (
+              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md bg-indigo-50 text-indigo-800 border border-indigo-200 text-[11px] font-bold">
+                <Lock className="w-3 h-3 text-indigo-600" />
+                Terkunci: {lockedFase} (Wali Kelas {normalizeKelasCode(userSession?.kelasAjar)})
+              </span>
+            )}
           </div>
 
           <div className="flex items-center gap-3 text-xs text-slate-500">
@@ -318,7 +368,7 @@ export const MasterKurikulumView: React.FC<MasterKurikulumViewProps> = ({
             </span>
             <span className="text-slate-300">|</span>
             <span className="bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded font-semibold text-[11px]">
-              Fase Aktif Kelas V: {activeMapel.faseAktif || 'Fase C'}
+              Fase Ditampilkan: {activeFaseTab}
             </span>
           </div>
         </div>
@@ -535,7 +585,7 @@ export const MasterKurikulumView: React.FC<MasterKurikulumViewProps> = ({
 
           {/* 25 Input Grid */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3 max-h-[650px] overflow-y-auto pr-1">
-            {activeMapel.tpNarasi.map((tpText, idx) => (
+            {currentFaseTpList.map((tpText, idx) => (
               <div
                 key={idx}
                 className="flex items-start gap-2 p-2.5 rounded-lg border border-slate-200 bg-slate-50/70 hover:bg-white hover:border-indigo-300 transition"

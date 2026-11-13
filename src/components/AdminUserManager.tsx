@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { MasterKurikulumMapel, UserAccount, UserRole, UserSession } from '../types/rapor';
+import { MasterKurikulumMapel, TingkatKelasSD, UserAccount, UserRole, UserSession } from '../types/rapor';
+import { TINGKAT_KELAS_SD, getFaseFromKelas, normalizeKelasCode } from '../utils/raporCalculations';
 import {
   BookOpen,
   Check,
@@ -51,6 +52,7 @@ export const AdminUserManager: React.FC<AdminUserManagerProps> = ({
     nama: '',
     nip: '-',
     role: 'guru_mapel',
+    kelasAjar: 'V',
     kodeMapel: 'PAK-01',
     password: 'guru123',
     email: '',
@@ -78,6 +80,7 @@ export const AdminUserManager: React.FC<AdminUserManagerProps> = ({
       nama: '',
       nip: '-',
       role: 'guru_mapel',
+      kelasAjar: 'V',
       kodeMapel: kurikulum[0]?.kodeMapel || 'PAK-01',
       password: 'guru123',
       email: '',
@@ -87,7 +90,7 @@ export const AdminUserManager: React.FC<AdminUserManagerProps> = ({
 
   const handleOpenEditModal = (user: UserAccount) => {
     setEditingUser(user);
-    setFormData({ ...user });
+    setFormData({ ...user, kelasAjar: user.kelasAjar || 'V' });
   };
 
   const handleSaveForm = (e: React.FormEvent) => {
@@ -95,15 +98,19 @@ export const AdminUserManager: React.FC<AdminUserManagerProps> = ({
     if (!formData.nama?.trim()) return;
 
     const mapelObj = kurikulum.find((m) => m.kodeMapel === formData.kodeMapel);
+    const resolvedRole = formData.role || 'guru_mapel';
+    const resolvedKelas =
+      resolvedRole === 'wali_kelas' ? normalizeKelasCode(formData.kelasAjar || 'V') : undefined;
 
     if (editingUser) {
       onUpdateUser({
         ...editingUser,
         nama: formData.nama.trim(),
         nip: formData.nip || '-',
-        role: formData.role || 'guru_mapel',
-        kodeMapel: formData.role === 'guru_mapel' ? formData.kodeMapel : undefined,
-        namaMapel: formData.role === 'guru_mapel' ? mapelObj?.namaMapel : undefined,
+        role: resolvedRole,
+        kelasAjar: resolvedKelas,
+        kodeMapel: resolvedRole === 'guru_mapel' ? formData.kodeMapel : undefined,
+        namaMapel: resolvedRole === 'guru_mapel' ? mapelObj?.namaMapel : undefined,
         password: formData.password || 'guru123',
         email: formData.email || '',
       });
@@ -113,9 +120,10 @@ export const AdminUserManager: React.FC<AdminUserManagerProps> = ({
         id: `user-${Date.now()}`,
         nama: formData.nama.trim(),
         nip: formData.nip || '-',
-        role: formData.role || 'guru_mapel',
-        kodeMapel: formData.role === 'guru_mapel' ? formData.kodeMapel : undefined,
-        namaMapel: formData.role === 'guru_mapel' ? mapelObj?.namaMapel : undefined,
+        role: resolvedRole,
+        kelasAjar: resolvedKelas,
+        kodeMapel: resolvedRole === 'guru_mapel' ? formData.kodeMapel : undefined,
+        namaMapel: resolvedRole === 'guru_mapel' ? mapelObj?.namaMapel : undefined,
         password: formData.password || 'guru123',
         email: formData.email || '',
       };
@@ -309,11 +317,11 @@ export const AdminUserManager: React.FC<AdminUserManagerProps> = ({
                           </div>
                         ) : user.role === 'wali_kelas' ? (
                           <span className="text-emerald-700 font-semibold text-xs">
-                            Seluruh 10 Mata Pelajaran (Kelas V)
+                            Wali Kelas {user.kelasAjar || 'V'} ({getFaseFromKelas(user.kelasAjar || 'V')}) — Seluruh Mapel
                           </span>
                         ) : (
                           <span className="text-slate-500 font-medium italic text-xs">
-                            Akses Pengaturan & Database
+                            Akses Pengaturan &amp; Database
                           </span>
                         )}
                       </td>
@@ -353,6 +361,10 @@ export const AdminUserManager: React.FC<AdminUserManagerProps> = ({
                                 userId: user.id,
                                 role: user.role,
                                 namaUser: user.nama,
+                                kelasAjar:
+                                  user.role === 'wali_kelas'
+                                    ? normalizeKelasCode(user.kelasAjar || 'V')
+                                    : undefined,
                                 kodeMapelAjar: user.kodeMapel,
                                 namaMapelAjar: user.namaMapel,
                               });
@@ -465,6 +477,27 @@ export const AdminUserManager: React.FC<AdminUserManagerProps> = ({
                   </select>
                 </div>
               </div>
+
+              {formData.role === 'wali_kelas' && (
+                <div>
+                  <label className="block font-semibold text-slate-700 mb-1">
+                    Tingkat Kelas yang Diampu (Wali Kelas):
+                  </label>
+                  <select
+                    value={normalizeKelasCode(formData.kelasAjar || 'V')}
+                    onChange={(e) =>
+                      setFormData({ ...formData, kelasAjar: e.target.value as TingkatKelasSD })
+                    }
+                    className="w-full bg-slate-50 border border-slate-300 rounded-lg p-2 font-bold"
+                  >
+                    {TINGKAT_KELAS_SD.map((t) => (
+                      <option key={t.kode} value={t.kode}>
+                        {t.label} — {t.fase}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
 
               {formData.role === 'guru_mapel' && (
                 <div>

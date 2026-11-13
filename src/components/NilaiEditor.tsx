@@ -4,13 +4,22 @@ import {
   MasterKurikulumMapel,
   NilaiFormatifSiswa,
   NilaiSumatifSiswa,
+  TingkatKelasSD,
   UserSession,
 } from '../types/rapor';
 import {
+  TINGKAT_KELAS_SD,
   generateAutoDeskripsiMapel,
+  getAtpForFase,
+  getCpForFase,
+  getFaseDisplayForKelas,
+  getFaseFromKelas,
+  getKelasAngka,
+  getTpNarasiForFase,
   hitungNilaiAkhir,
   hitungRataFormatif,
   hitungRataSumatif,
+  normalizeKelasCode,
 } from '../utils/raporCalculations';
 import {
   AlertCircle,
@@ -81,6 +90,19 @@ export const NilaiEditor: React.FC<NilaiEditorProps> = ({
       : kurikulum[0]?.kodeMapel || '';
 
   const [selectedMapelKode, setSelectedMapelKode] = useState<string>(initialMapelKode);
+
+  // Selected Class (Tingkat I - VI)
+  const isWaliKelasLocked =
+    userSession?.role === 'wali_kelas' && Boolean(userSession.kelasAjar);
+  const lockedWaliKelas = isWaliKelasLocked
+    ? normalizeKelasCode(userSession?.kelasAjar)
+    : undefined;
+
+  const currentSelectedStudent = siswaList.find((s) => s.nis === selectedNis);
+  const [selectedKelas, setSelectedKelas] = useState<TingkatKelasSD>(
+    lockedWaliKelas || normalizeKelasCode(currentSelectedStudent?.kelas || siswaList[0]?.kelas || 'V')
+  );
+
   const [showAllTps, setShowAllTps] = useState<boolean>(false);
   const [searchSiswa, setSearchSiswa] = useState<string>('');
   const [showKurikulumPatokan, setShowKurikulumPatokan] = useState<boolean>(false);
@@ -103,26 +125,54 @@ export const NilaiEditor: React.FC<NilaiEditorProps> = ({
     }
   }, [userSession]);
 
+  // If role is wali_kelas, lock selectedKelas to their assigned class
+  useEffect(() => {
+    if (userSession?.role === 'wali_kelas' && userSession.kelasAjar) {
+      setSelectedKelas(normalizeKelasCode(userSession.kelasAjar));
+    }
+  }, [userSession]);
+
   const isRoleLocked =
     userSession?.role === 'guru_mapel' &&
     userSession.kodeMapelAjar !== undefined &&
     userSession.kodeMapelAjar !== '';
 
-  const activeSiswa = siswaList.find((s) => s.nis === selectedNis) || siswaList[0];
+  // Students filtered strictly by selectedKelas (or locked wali kelas)
+  const effectiveKelas: TingkatKelasSD = lockedWaliKelas || selectedKelas;
+  const classSiswaList = useMemo(() => {
+    return siswaList.filter((s) => normalizeKelasCode(s.kelas) === effectiveKelas);
+  }, [siswaList, effectiveKelas]);
+
+  // Keep selectedNis synced with classSiswaList when changing class
+  useEffect(() => {
+    if (classSiswaList.length > 0 && !classSiswaList.some((s) => s.nis === selectedNis)) {
+      onSelectNis(classSiswaList[0].nis);
+    }
+  }, [classSiswaList, selectedNis, onSelectNis]);
+
+  const activeSiswa = classSiswaList.find((s) => s.nis === selectedNis) || classSiswaList[0];
   const activeMapel =
     kurikulum.find((m) => m.kodeMapel === selectedMapelKode) || kurikulum[0];
 
+  // Dynamic Fase, CP, ATP, and TP indicators based on effectiveKelas
+  const activeFase = getFaseFromKelas(effectiveKelas);
+  const activeFaseDisplay = getFaseDisplayForKelas(effectiveKelas);
+  const activeCp = getCpForFase(activeMapel, activeFase);
+  const activeAtp = getAtpForFase(activeMapel, activeFase);
+  const activeTpNarasi = getTpNarasiForFase(activeMapel, activeFase);
+
   // Current Formatif & Sumatif for Active Student (in 'satuan' mode)
+  const targetNis = activeSiswa?.nis || selectedNis;
   const currentFormatif =
-    nilaiFormatif.find((f) => f.nis === selectedNis && f.kodeMapel === selectedMapelKode) || {
-      nis: selectedNis,
+    nilaiFormatif.find((f) => f.nis === targetNis && f.kodeMapel === selectedMapelKode) || {
+      nis: targetNis,
       kodeMapel: selectedMapelKode,
       nilaiTp: new Array(25).fill(0),
     };
 
   const currentSumatif =
-    nilaiSumatif.find((s) => s.nis === selectedNis && s.kodeMapel === selectedMapelKode) || {
-      nis: selectedNis,
+    nilaiSumatif.find((s) => s.nis === targetNis && s.kodeMapel === selectedMapelKode) || {
+      nis: targetNis,
       kodeMapel: selectedMapelKode,
       sumatifLm: [0, 0, 0, 0],
       sts: 0,
@@ -139,13 +189,14 @@ export const NilaiEditor: React.FC<NilaiEditorProps> = ({
   const nilaiAkhir = hitungNilaiAkhir(rataFormatif, rataSumatif);
   const autoDeskripsi = generateAutoDeskripsiMapel(
     currentFormatif.nilaiTp,
-    activeMapel.tpNarasi,
-    activeMapel.namaMapel
+    activeTpNarasi,
+    activeMapel.namaMapel,
+    activeSiswa?.namaPanggilan || activeSiswa?.nama.split(' ')[0]
   );
 
-  // Grid Data for ALL students in active mapel
+  // Grid Data for ALL students in the selected class & active mapel
   const allStudentsGridData = useMemo(() => {
-    return siswaList.map((siswa) => {
+    return classSiswaList.map((siswa) => {
       const fItem =
         nilaiFormatif.find((f) => f.nis === siswa.nis && f.kodeMapel === selectedMapelKode) || {
           nis: siswa.nis,
@@ -165,7 +216,12 @@ export const NilaiEditor: React.FC<NilaiEditorProps> = ({
       const rForm = hitungRataFormatif(fItem.nilaiTp);
       const rSum = hitungRataSumatif(sItem.sumatifLm, sItem.sts, sItem.sas);
       const na = hitungNilaiAkhir(rForm, rSum);
-      const desc = generateAutoDeskripsiMapel(fItem.nilaiTp, activeMapel.tpNarasi, activeMapel.namaMapel);
+      const desc = generateAutoDeskripsiMapel(
+        fItem.nilaiTp,
+        activeTpNarasi,
+        activeMapel.namaMapel,
+        siswa.namaPanggilan || siswa.nama.split(' ')[0]
+      );
 
       return {
         siswa,
@@ -177,7 +233,7 @@ export const NilaiEditor: React.FC<NilaiEditorProps> = ({
         deskripsi: desc.deskripsi,
       };
     });
-  }, [siswaList, nilaiFormatif, nilaiSumatif, selectedMapelKode, activeMapel]);
+  }, [classSiswaList, nilaiFormatif, nilaiSumatif, selectedMapelKode, activeMapel, activeTpNarasi]);
 
   // Filter grid by search
   const filteredGridData = useMemo(() => {
@@ -217,9 +273,9 @@ export const NilaiEditor: React.FC<NilaiEditorProps> = ({
       const parts = line.split('\t').map((p) => p.trim());
       if (parts.length < 2) return;
 
-      // Cek apakah kolom pertama adalah NIS atau Nama
+      // Cek apakah kolom pertama adalah NIS atau Nama (khusus di kelas aktif)
       const identifier = parts[0];
-      const targetStudent = siswaList.find(
+      const targetStudent = classSiswaList.find(
         (s) =>
           s.nis === identifier ||
           s.nisn === identifier ||
@@ -266,9 +322,9 @@ export const NilaiEditor: React.FC<NilaiEditorProps> = ({
     }, 1500);
   };
 
-  // Handler: Quick Fill for all students in this subject
+  // Handler: Quick Fill for all students in this class & subject
   const handleApplyQuickFill = () => {
-    siswaList.forEach((s) => {
+    classSiswaList.forEach((s) => {
       if (quickFillColumn === 'tp1') {
         onUpdateFormatif(s.nis, selectedMapelKode, 0, quickFillValue);
       } else {
@@ -294,7 +350,7 @@ export const NilaiEditor: React.FC<NilaiEditorProps> = ({
       'TP_3',
       'TP_4',
     ];
-    const rows = siswaList.map((s) => {
+    const rows = classSiswaList.map((s) => {
       const sumItem = nilaiSumatif.find(
         (sm) => sm.nis === s.nis && sm.kodeMapel === selectedMapelKode
       );
@@ -321,7 +377,7 @@ export const NilaiEditor: React.FC<NilaiEditorProps> = ({
     const encoded = encodeURI(csvContent);
     const link = document.createElement('a');
     link.setAttribute('href', encoded);
-    link.setAttribute('download', `Format_Nilai_${selectedMapelKode}_Kelas_${siswaList[0]?.kelas || 'V'}.csv`);
+    link.setAttribute('download', `Format_Nilai_${selectedMapelKode}_Kelas_${effectiveKelas}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -351,12 +407,40 @@ export const NilaiEditor: React.FC<NilaiEditorProps> = ({
             </p>
           </div>
 
-          {/* Mapel & Mode Switcher */}
+          {/* Class, Mapel & Mode Switcher */}
           <div className="flex flex-wrap items-center gap-3">
+            {/* Kelas Dropdown (All 1-6 for Guru Mapel/Admin, Locked for Wali Kelas) */}
+            <div>
+              <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1 flex items-center gap-1">
+                Pilih Kelas ({activeFase}):
+                {isWaliKelasLocked && <Lock className="w-3 h-3 text-indigo-600" />}
+              </label>
+              <select
+                value={effectiveKelas}
+                onChange={(e) => setSelectedKelas(e.target.value as TingkatKelasSD)}
+                disabled={isWaliKelasLocked}
+                className={`text-xs font-bold p-2.5 rounded-xl border focus:outline-none focus:ring-2 focus:ring-indigo-500 ${
+                  isWaliKelasLocked
+                    ? 'bg-slate-100 text-slate-700 border-slate-300 cursor-not-allowed'
+                    : 'bg-slate-50 text-indigo-950 border-slate-300 cursor-pointer'
+                }`}
+              >
+                {TINGKAT_KELAS_SD.map((k) => {
+                  const jml = siswaList.filter((s) => normalizeKelasCode(s.kelas) === k.kode).length;
+                  return (
+                    <option key={k.kode} value={k.kode}>
+                      {k.label} • {k.fase} ({jml} siswa)
+                    </option>
+                  );
+                })}
+              </select>
+            </div>
+
             {/* Mapel Dropdown */}
             <div>
-              <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1">
+              <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1 flex items-center gap-1">
                 Pilih Mata Pelajaran:
+                {isRoleLocked && <Lock className="w-3 h-3 text-emerald-600" />}
               </label>
               <select
                 value={selectedMapelKode}
@@ -417,11 +501,25 @@ export const NilaiEditor: React.FC<NilaiEditorProps> = ({
             <div className="flex items-center gap-2">
               <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
               <span>
-                Anda masuk sebagai <strong>{userSession?.namaUser}</strong>. Akses Anda difokuskan pada penginputan nilai <strong>{activeMapel.namaMapel}</strong>.
+                Anda masuk sebagai Guru Mapel <strong>{userSession?.namaUser}</strong>. Pilihan mata pelajaran terkunci pada <strong>{activeMapel.namaMapel}</strong>, dan Anda dapat memilih seluruh kelas (Kelas 1 s.d. 6) melalui dropdown kelas di atas.
               </span>
             </div>
-            <span className="text-[11px] text-emerald-700 font-semibold bg-emerald-100/70 px-2 py-0.5 rounded">
-              Keamanan Terjamin
+            <span className="text-[11px] text-emerald-700 font-semibold bg-emerald-100/70 px-2 py-0.5 rounded shrink-0">
+              Mapel Terkunci • Semua Kelas
+            </span>
+          </div>
+        )}
+
+        {isWaliKelasLocked && (
+          <div className="mt-4 p-3 bg-indigo-50 border border-indigo-200 rounded-xl flex items-center justify-between gap-3 text-xs text-indigo-950">
+            <div className="flex items-center gap-2">
+              <Lock className="w-4 h-4 text-indigo-600 shrink-0" />
+              <span>
+                Anda masuk sebagai Wali Kelas <strong>{effectiveKelas} ({getKelasAngka(effectiveKelas)})</strong> ({userSession?.namaUser}). Akses kelas & Capaian Pembelajaran otomatis terkunci pada <strong>{activeFase}</strong>.
+              </span>
+            </div>
+            <span className="text-[11px] text-indigo-700 font-semibold bg-indigo-100 px-2 py-0.5 rounded shrink-0">
+              {activeFaseDisplay}
             </span>
           </div>
         )}
@@ -432,8 +530,8 @@ export const NilaiEditor: React.FC<NilaiEditorProps> = ({
             <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block">
               Total Siswa Kelas
             </span>
-            <div className="text-2xl font-black text-slate-900 mt-1">{siswaList.length} Anak</div>
-            <span className="text-[11px] text-slate-500">Kelas {siswaList[0]?.kelas || 'V'}</span>
+            <div className="text-2xl font-black text-slate-900 mt-1">{classSiswaList.length} Anak</div>
+            <span className="text-[11px] text-slate-500">Kelas {effectiveKelas} ({activeFase})</span>
           </div>
 
           <div className="bg-sky-50 rounded-xl p-3.5 border border-sky-100">
@@ -442,7 +540,7 @@ export const NilaiEditor: React.FC<NilaiEditorProps> = ({
             </span>
             <div className="text-2xl font-black text-sky-950 mt-1">{subjectCompletionRate}%</div>
             <span className="text-[11px] text-sky-700 font-medium">
-              {allStudentsGridData.filter((i) => i.nilaiAkhir > 0).length} dari {siswaList.length} siswa terisi
+              {allStudentsGridData.filter((i) => i.nilaiAkhir > 0).length} dari {classSiswaList.length} siswa terisi
             </span>
           </div>
 
@@ -474,14 +572,14 @@ export const NilaiEditor: React.FC<NilaiEditorProps> = ({
             onClick={() => setShowKurikulumPatokan(!showKurikulumPatokan)}
             className="w-full flex items-center justify-between p-3 rounded-xl bg-indigo-50/70 hover:bg-indigo-100/70 text-indigo-950 border border-indigo-200 transition"
           >
-            <div className="flex items-center gap-2 text-xs font-bold">
-              <Sparkles className="w-4 h-4 text-indigo-600" />
+            <div className="flex flex-wrap items-center gap-2 text-xs font-bold text-left">
+              <Sparkles className="w-4 h-4 text-indigo-600 shrink-0" />
               <span>Patokan Penilaian & 25 Tujuan Pembelajaran ({activeMapel.namaMapel})</span>
               <span className="px-2 py-0.5 rounded text-[10px] bg-white text-indigo-800 border border-indigo-200">
-                Fase C (Kelas V) - Kepka BKPDM No. 020/2026
+                {activeFaseDisplay} - Kepka BKPDM No. 020/2026
               </span>
             </div>
-            <div className="flex items-center gap-1.5 text-xs font-semibold text-indigo-700">
+            <div className="flex items-center gap-1.5 text-xs font-semibold text-indigo-700 shrink-0">
               <span>{showKurikulumPatokan ? 'Tutup Patokan' : 'Buka Patokan & Indikator TP'}</span>
               {showKurikulumPatokan ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
             </div>
@@ -493,34 +591,53 @@ export const NilaiEditor: React.FC<NilaiEditorProps> = ({
                 <div className="p-3 rounded-lg bg-slate-50 border border-slate-200">
                   <span className="font-bold text-slate-800 block mb-1 flex items-center gap-1">
                     <Sparkles className="w-3.5 h-3.5 text-indigo-600" />
-                    Capaian Pembelajaran (CP) Aktif:
+                    Capaian Pembelajaran (CP) {activeFase} - Kelas {effectiveKelas}:
                   </span>
                   <p className="text-slate-600 text-[11px] leading-relaxed">
-                    {activeMapel.cpFaseC || activeMapel.cp}
+                    {activeCp}
                   </p>
                 </div>
                 <div className="p-3 rounded-lg bg-slate-50 border border-slate-200">
                   <span className="font-bold text-slate-800 block mb-1 flex items-center gap-1">
                     <FileText className="w-3.5 h-3.5 text-indigo-600" />
-                    Alur Tujuan Pembelajaran (ATP) Aktif:
+                    Alur Tujuan Pembelajaran (ATP) {activeFase} - Kelas {effectiveKelas}:
                   </span>
                   <p className="text-slate-600 text-[11px] leading-relaxed">
-                    {activeMapel.atpFaseC || activeMapel.atp}
+                    {activeAtp}
                   </p>
                 </div>
               </div>
 
+              {activeMapel.elemenCapaian && activeMapel.elemenCapaian.length > 0 && (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-[11px]">
+                  {activeMapel.elemenCapaian.map((el, i) => {
+                    const desc =
+                      activeFase === 'Fase A'
+                        ? el.deskripsiFaseA
+                        : activeFase === 'Fase B'
+                        ? el.deskripsiFaseB
+                        : el.deskripsiFaseC;
+                    return (
+                      <div key={i} className="p-2.5 rounded-lg bg-indigo-50/40 border border-indigo-100">
+                        <span className="font-bold text-indigo-950 block">{el.elemen}</span>
+                        <span className="text-slate-600 leading-snug">{desc}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+
               <div>
                 <div className="flex items-center justify-between mb-2">
                   <span className="text-xs font-bold text-slate-800">
-                    Daftar Indikator 25 Tujuan Pembelajaran (Patokan Nilai Formatif):
+                    Daftar Indikator 25 Tujuan Pembelajaran {activeFase} (Patokan Nilai Formatif):
                   </span>
                   <span className="text-[11px] text-slate-500">
                     Nilai tertinggi & terendah menghasilkan kalimat capaian otomatis
                   </span>
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-2 max-h-56 overflow-y-auto pr-1">
-                  {activeMapel.tpNarasi.map((tp, idx) => (
+                  {activeTpNarasi.map((tp, idx) => (
                     <div
                       key={idx}
                       className="p-2 rounded-lg bg-slate-50 border border-slate-200 flex items-start gap-2 text-[11px]"
@@ -663,6 +780,13 @@ export const NilaiEditor: React.FC<NilaiEditorProps> = ({
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
+                {filteredGridData.length === 0 && (
+                  <tr>
+                    <td colSpan={15} className="py-10 text-center text-slate-400 text-xs">
+                      Belum ada peserta didik terdaftar pada Kelas {effectiveKelas}. Tambahkan siswa terlebih dahulu di menu Data Siswa.
+                    </td>
+                  </tr>
+                )}
                 {filteredGridData.map((row, idx) => {
                   const s = row.siswa;
                   return (
@@ -863,18 +987,24 @@ export const NilaiEditor: React.FC<NilaiEditorProps> = ({
       {/* ===================================================================== */}
       {inputMode === 'satuan' && (
         <div className="space-y-6">
+          {!activeSiswa ? (
+            <div className="bg-white rounded-xl p-8 text-center border border-slate-200 text-slate-500 text-xs">
+              Belum ada peserta didik pada Kelas {effectiveKelas}. Silakan pilih kelas lain atau tambahkan data siswa di menu Data Siswa.
+            </div>
+          ) : (
+            <>
           {/* Siswa Selector Bar */}
           <div className="bg-white rounded-xl p-4 shadow-xs border border-slate-200 flex flex-wrap items-center justify-between gap-3">
             <div className="flex items-center gap-2">
               <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">
-                Pilih Siswa:
+                Pilih Siswa (Kelas {effectiveKelas}):
               </span>
               <select
-                value={selectedNis}
+                value={targetNis}
                 onChange={(e) => onSelectNis(e.target.value)}
                 className="bg-slate-50 border border-slate-300 rounded-lg px-3 py-1.5 text-xs font-bold text-slate-900 focus:ring-2 focus:ring-indigo-500 cursor-pointer"
               >
-                {siswaList.map((s) => (
+                {classSiswaList.map((s) => (
                   <option key={s.nis} value={s.nis}>
                     {s.nama} ({s.nis})
                   </option>
@@ -883,7 +1013,7 @@ export const NilaiEditor: React.FC<NilaiEditorProps> = ({
             </div>
 
             <div className="text-xs text-slate-500">
-              Siswa terpilih: <strong className="text-slate-900">{activeSiswa.nama}</strong> ({activeSiswa.nis})
+              Siswa terpilih: <strong className="text-slate-900">{activeSiswa.nama}</strong> ({activeSiswa.nis}) • {activeFase}
             </div>
           </div>
 
@@ -895,7 +1025,7 @@ export const NilaiEditor: React.FC<NilaiEditorProps> = ({
                   <span className="w-6 h-6 rounded-full bg-sky-100 text-sky-700 font-extrabold flex items-center justify-center text-xs">
                     1
                   </span>
-                  Asesmen Formatif (25 Tujuan Pembelajaran / TP)
+                  Asesmen Formatif (25 Tujuan Pembelajaran / TP • {activeFase})
                 </h3>
                 <p className="text-xs text-slate-500 mt-0.5">
                   Input skor 0 - 100 untuk TP yang telah dinilai. Sistem otomatis mendeteksi nilai tertinggi dan terendah.
@@ -921,7 +1051,7 @@ export const NilaiEditor: React.FC<NilaiEditorProps> = ({
 
             {/* Grid of TP Inputs */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-3">
-              {(showAllTps ? activeMapel.tpNarasi : activeMapel.tpNarasi.slice(0, 10)).map(
+              {(showAllTps ? activeTpNarasi : activeTpNarasi.slice(0, 10)).map(
                 (narasi, index) => {
                   const val = currentFormatif.nilaiTp[index] || 0;
                   const isMax = autoDeskripsi.maxIndex === index && val > 0;
@@ -961,7 +1091,7 @@ export const NilaiEditor: React.FC<NilaiEditorProps> = ({
                         value={val || ''}
                         onChange={(e) =>
                           onUpdateFormatif(
-                            selectedNis,
+                            targetNis,
                             selectedMapelKode,
                             index,
                             parseInt(e.target.value, 10) || 0
@@ -1018,7 +1148,7 @@ export const NilaiEditor: React.FC<NilaiEditorProps> = ({
                     value={item.val || ''}
                     onChange={(e) =>
                       onUpdateSumatif(
-                        selectedNis,
+                        targetNis,
                         selectedMapelKode,
                         item.field as any,
                         parseInt(e.target.value, 10) || 0
@@ -1036,12 +1166,14 @@ export const NilaiEditor: React.FC<NilaiEditorProps> = ({
           <div className="p-4 bg-indigo-50/50 border border-indigo-200 rounded-xl space-y-1">
             <h4 className="text-xs font-bold text-indigo-900 flex items-center gap-1.5">
               <Sparkles className="w-4 h-4 text-indigo-600" />
-              Pratinjau Deskripsi Otomatis Rapor ({activeSiswa.nama}):
+              Pratinjau Deskripsi Otomatis Rapor ({activeSiswa.nama} • {activeFase}):
             </h4>
             <p className="text-xs text-slate-800 leading-relaxed italic bg-white p-3 rounded-lg border border-indigo-100">
               "{autoDeskripsi.deskripsi}"
             </p>
           </div>
+          </>
+          )}
         </div>
       )}
 
@@ -1174,7 +1306,7 @@ export const NilaiEditor: React.FC<NilaiEditorProps> = ({
 
             <div className="p-5 space-y-4 text-xs">
               <p className="text-slate-600">
-                Isi nilai yang sama secara otomatis ke seluruh {siswaList.length} siswa pada mapel <strong>{activeMapel.namaMapel}</strong>.
+                Isi nilai yang sama secara otomatis ke seluruh {classSiswaList.length} siswa Kelas {effectiveKelas} pada mapel <strong>{activeMapel.namaMapel}</strong>.
               </p>
 
               <div>

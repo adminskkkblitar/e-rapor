@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   AbsensiSiswa,
   DataSiswa,
@@ -12,8 +12,8 @@ import {
   PredikatKokurikuler,
   ProfilSekolah,
   RaporMapelKalkulasi,
+  TingkatKelasSD,
   UserAccount,
-  UserRole,
   UserSession,
 } from './types/rapor';
 import {
@@ -28,12 +28,16 @@ import {
   getInitialNilaiSumatif,
 } from './data/initialData';
 import {
-  DIMENSI_8_PROFIL_LULUSAN,
+  TINGKAT_KELAS_SD,
   generateAutoDeskripsiMapel,
+  getFaseFromKelas,
+  getTargetKelasLanjutan,
+  getTpNarasiForFase,
   hitungNilaiAkhir,
   hitungRataFormatif,
   hitungRataSumatif,
   kalkulasiPeringkatTerselubung,
+  normalizeKelasCode,
 } from './utils/raporCalculations';
 import { DashboardOverview } from './components/DashboardOverview';
 import { PrintCover } from './components/PrintCover';
@@ -52,18 +56,19 @@ import { Sidebar, TabType } from './components/Sidebar';
 import { GasSyncPayload, getStoredGasUrl, saveToGoogleSheets } from './utils/gasSyncService';
 import {
   AlertCircle,
-  Calendar,
+  BookOpen,
   CheckCircle2,
   Database,
   FileText,
   Menu,
+  Plus,
   Printer,
   RefreshCw,
   School,
-  Sparkles,
+  Trash2,
   UploadCloud,
+  UserCheck,
   Users,
-  XCircle,
 } from 'lucide-react';
 
 export default function App() {
@@ -88,6 +93,7 @@ export default function App() {
     userId: 'user-wali',
     role: 'wali_kelas',
     namaUser: 'Petrus Apriprasetyo, S.Pd',
+    kelasAjar: 'V',
   });
 
   // Hybrid Catatan Wali Kelas State per student NIS
@@ -177,10 +183,27 @@ export default function App() {
     }
   };
 
+  // Scoped Siswa List (Wali Kelas terkunci hanya pada kelas yang diampu)
+  const scopedSiswaList = useMemo(() => {
+    if (userSession.role === 'wali_kelas' && userSession.kelasAjar) {
+      const targetKelas = normalizeKelasCode(userSession.kelasAjar);
+      return siswaList.filter((s) => normalizeKelasCode(s.kelas) === targetKelas);
+    }
+    return siswaList;
+  }, [siswaList, userSession.role, userSession.kelasAjar]);
+
+  // Keep selectedNis valid within scopedSiswaList
+  useEffect(() => {
+    if (scopedSiswaList.length === 0) return;
+    if (!scopedSiswaList.some((s) => s.nis === selectedNis)) {
+      setSelectedNis(scopedSiswaList[0].nis);
+    }
+  }, [scopedSiswaList, selectedNis]);
+
   // Active Student
   const activeSiswa = useMemo(() => {
-    return siswaList.find((s) => s.nis === selectedNis) || siswaList[0];
-  }, [siswaList, selectedNis]);
+    return scopedSiswaList.find((s) => s.nis === selectedNis) || scopedSiswaList[0];
+  }, [scopedSiswaList, selectedNis]);
 
   // Calculations for all students to compute hidden ranking and complete subject breakdown
   const studentAverages = useMemo(() => {
@@ -217,13 +240,34 @@ export default function App() {
     });
   }, [siswaList, kurikulum, nilaiFormatif, nilaiSumatif]);
 
-  // Hidden ranking calculation map
+  // Hidden ranking calculation map (dihitung per kelas agar lintas tingkat tidak bercampur)
   const hiddenRankingMap = useMemo(() => {
-    return kalkulasiPeringkatTerselubung(studentAverages);
+    const combined = new Map<
+      string,
+      { ranking: number; totalSiswa: number; persentil: 'Top 10%' | 'Middle 60%' | 'Bottom 30%' }
+    >();
+    const byKelas = new Map<string, typeof studentAverages>();
+
+    studentAverages.forEach((s) => {
+      const k = normalizeKelasCode(s.kelas);
+      const group = byKelas.get(k) || [];
+      group.push(s);
+      byKelas.set(k, group);
+    });
+
+    byKelas.forEach((group) => {
+      const rankMap = kalkulasiPeringkatTerselubung(group);
+      rankMap.forEach((val, key) => {
+        combined.set(key, val);
+      });
+    });
+
+    return combined;
   }, [studentAverages]);
 
-  // Calculated Mapel values for the currently selected student
+  // Calculated Mapel values for the currently selected student (uses student's Fase TPs)
   const calculatedMapelsForActiveSiswa: RaporMapelKalkulasi[] = useMemo(() => {
+    const activeFase = getFaseFromKelas(activeSiswa?.kelas || userSession.kelasAjar);
     return kurikulum.map((mapel) => {
       const form = nilaiFormatif.find((f) => f.nis === selectedNis && f.kodeMapel === mapel.kodeMapel);
       const sum = nilaiSumatif.find((s) => s.nis === selectedNis && s.kodeMapel === mapel.kodeMapel);
@@ -237,7 +281,8 @@ export default function App() {
       const rSum = hitungRataSumatif(sumLm, sts, sas);
       const na = hitungNilaiAkhir(rForm, rSum);
       const nickname = activeSiswa?.namaPanggilan || activeSiswa?.nama.split(' ')[0] || '';
-      const autoDesc = generateAutoDeskripsiMapel(tpScores, mapel.tpNarasi, mapel.namaMapel, nickname);
+      const tpNarasiFase = getTpNarasiForFase(mapel, activeFase);
+      const autoDesc = generateAutoDeskripsiMapel(tpScores, tpNarasiFase, mapel.namaMapel, nickname);
 
       return {
         kodeMapel: mapel.kodeMapel,
@@ -255,7 +300,7 @@ export default function App() {
         minTpNilai: autoDesc.minNilai,
       };
     });
-  }, [kurikulum, nilaiFormatif, nilaiSumatif, selectedNis, activeSiswa]);
+  }, [kurikulum, nilaiFormatif, nilaiSumatif, selectedNis, activeSiswa, userSession.kelasAjar]);
 
   // Current Kokurikuler, Ekstra, and Absensi for Active Student
   const currentKokurikuler = useMemo(() => {
@@ -273,16 +318,17 @@ export default function App() {
   // Active student ranking info
   const activeRankingInfo = hiddenRankingMap.get(selectedNis) || {
     ranking: 1,
-    totalSiswa: siswaList.length,
+    totalSiswa: scopedSiswaList.length,
     persentil: 'Top 10%' as const,
   };
 
+  const defaultTargetKelasActive = getTargetKelasLanjutan(activeSiswa?.kelas);
   const activeStatusKenaikan = statusKenaikanMap[selectedNis] || {
-    status: 'Naik Kelas',
-    targetKelas: 'Kelas VI (Enam)',
+    status: defaultTargetKelasActive === 'Lulus SD' ? ('Lulus' as const) : ('Naik Kelas' as const),
+    targetKelas: defaultTargetKelasActive,
   };
 
-  // Leger Rows
+  // Leger Rows (full + scoped)
   const legerRows: LegerRowData[] = useMemo(() => {
     return studentAverages.map((s) => {
       const rankInfo = hiddenRankingMap.get(s.nis) || {
@@ -290,9 +336,10 @@ export default function App() {
         totalSiswa: studentAverages.length,
         persentil: 'Middle 60%' as const,
       };
+      const defaultTarget = getTargetKelasLanjutan(s.kelas);
       const statusInfo = statusKenaikanMap[s.nis] || {
-        status: 'Naik Kelas',
-        targetKelas: 'Kelas VI (Enam)',
+        status: defaultTarget === 'Lulus SD' ? ('Lulus' as const) : ('Naik Kelas' as const),
+        targetKelas: defaultTarget,
       };
       return {
         nis: s.nis,
@@ -309,6 +356,11 @@ export default function App() {
       };
     });
   }, [studentAverages, hiddenRankingMap, statusKenaikanMap, customNotes]);
+
+  const scopedLegerRows = useMemo(() => {
+    const allowedNis = new Set(scopedSiswaList.map((s) => s.nis));
+    return legerRows.filter((r) => allowedNis.has(r.nis));
+  }, [legerRows, scopedSiswaList]);
 
   // Handlers for updates
   const handleUpdateFormatif = (
@@ -406,8 +458,10 @@ export default function App() {
   };
 
   const handleApplyDimensiToAll = (templateDimensi: ItemKokurikuler8Dimensi[]) => {
-    setKokurikulerList((prev) =>
-      siswaList.map((siswa) => {
+    const allowedNis = new Set(scopedSiswaList.map((s) => s.nis));
+    setKokurikulerList((prev) => {
+      const untouched = prev.filter((k) => !allowedNis.has(k.nis));
+      const updatedScoped = scopedSiswaList.map((siswa) => {
         const existing = prev.find((k) => k.nis === siswa.nis);
         const newDimensi = templateDimensi.map((tmpl) => {
           const match = existing?.dimensi.find((d) => d.kode === tmpl.kode);
@@ -423,8 +477,9 @@ export default function App() {
           semester,
           dimensi: newDimensi,
         };
-      })
-    );
+      });
+      return [...untouched, ...updatedScoped];
+    });
   };
 
   const handleUpdateEkstrakurikuler = (nis: string, daftarEkstra: ItemEkstrakurikuler[]) => {
@@ -464,9 +519,10 @@ export default function App() {
     status: 'Naik Kelas' | 'Tinggal Kelas' | 'Lulus' | 'Belum Ditentukan',
     targetKelas?: string
   ) => {
+    const siswa = siswaList.find((s) => s.nis === nis);
     setStatusKenaikanMap((prev) => ({
       ...prev,
-      [nis]: { status, targetKelas: targetKelas || 'Kelas VI (Enam)' },
+      [nis]: { status, targetKelas: targetKelas || getTargetKelasLanjutan(siswa?.kelas) },
     }));
   };
 
@@ -532,7 +588,7 @@ export default function App() {
 
     setStatusKenaikanMap((prev) => ({
       ...prev,
-      [newSiswa.nis]: { status: 'Naik Kelas', targetKelas: 'Kelas VI (Enam)' },
+      [newSiswa.nis]: { status: 'Naik Kelas', targetKelas: getTargetKelasLanjutan(newSiswa.kelas) },
     }));
   };
 
@@ -596,7 +652,7 @@ export default function App() {
 
     const newStatus: Record<string, { status: 'Naik Kelas'; targetKelas: string }> = {};
     toAdd.forEach((s) => {
-      newStatus[s.nis] = { status: 'Naik Kelas', targetKelas: 'Kelas VI (Enam)' };
+      newStatus[s.nis] = { status: 'Naik Kelas', targetKelas: getTargetKelasLanjutan(s.kelas) };
     });
     setStatusKenaikanMap((prev) => ({ ...prev, ...newStatus }));
   };
@@ -640,6 +696,125 @@ export default function App() {
     setUserSession((prev) => ({ ...prev, isLoggedIn: false }));
   };
 
+  // Terapkan sesi login / switch role & arahkan halaman sesuai hak akses
+  const applySessionAndRoute = (newSession: UserSession) => {
+    const normalizedSession: UserSession = {
+      ...newSession,
+      kelasAjar:
+        newSession.role === 'wali_kelas'
+          ? normalizeKelasCode(newSession.kelasAjar || 'V')
+          : undefined,
+    };
+    setUserSession(normalizedSession);
+
+    if (normalizedSession.role === 'admin') {
+      setActiveTab('guru_manager');
+    } else if (normalizedSession.role === 'wali_kelas') {
+      setActiveTab('siswa');
+      const targetKelas = normalizeKelasCode(normalizedSession.kelasAjar || 'V');
+      const firstInClass = siswaList.find((s) => normalizeKelasCode(s.kelas) === targetKelas);
+      if (firstInClass) {
+        setSelectedNis(firstInClass.nis);
+      }
+    } else if (normalizedSession.role === 'guru_mapel') {
+      setActiveTab('nilai');
+    } else {
+      setActiveTab('dashboard');
+    }
+  };
+
+  // Sinkronkan Profil Sekolah & Master Penugasan Wali Kelas 1-6 / Guru Mapel ke Akun Masuk
+  const handleUpdateSekolahAndSyncUsers = (updatedSekolah: ProfilSekolah) => {
+    const syncedWaliMap = { ...(updatedSekolah.waliKelasPerTingkat || {}) };
+    if (
+      updatedSekolah.namaWaliKelas &&
+      (!syncedWaliMap.V || syncedWaliMap.V.nama !== updatedSekolah.namaWaliKelas)
+    ) {
+      syncedWaliMap.V = {
+        nama: updatedSekolah.namaWaliKelas,
+        nip: updatedSekolah.nipWaliKelas || syncedWaliMap.V?.nip || '-',
+      };
+    }
+
+    const finalSekolah: ProfilSekolah = {
+      ...updatedSekolah,
+      waliKelasPerTingkat: syncedWaliMap,
+      namaWaliKelas: syncedWaliMap.V?.nama || updatedSekolah.namaWaliKelas,
+      nipWaliKelas: syncedWaliMap.V?.nip || updatedSekolah.nipWaliKelas,
+    };
+    setSekolah(finalSekolah);
+
+    setUserAccounts((prevUsers) => {
+      const updated = prevUsers.map((u) => {
+        if (u.role === 'wali_kelas') {
+          const kelasKey = normalizeKelasCode(u.kelasAjar || 'V');
+          const mappedWali = finalSekolah.waliKelasPerTingkat?.[kelasKey];
+          if (mappedWali && mappedWali.nama.trim()) {
+            return {
+              ...u,
+              nama: mappedWali.nama.trim(),
+              nip: mappedWali.nip || '-',
+              kelasAjar: kelasKey,
+            };
+          }
+        } else if (u.role === 'guru_mapel' && u.kodeMapel) {
+          const mappedGm = finalSekolah.guruMapelList?.find((gm) => gm.kodeMapel === u.kodeMapel);
+          if (mappedGm && mappedGm.nama.trim()) {
+            return {
+              ...u,
+              nama: mappedGm.nama.trim(),
+              nip: mappedGm.nip || '-',
+              namaMapel: mappedGm.namaMapel || u.namaMapel,
+            };
+          }
+        }
+        return u;
+      });
+
+      // Tambahkan akun Wali Kelas baru jika tingkat tsb belum memiliki akun
+      TINGKAT_KELAS_SD.forEach((t) => {
+        const entry = finalSekolah.waliKelasPerTingkat?.[t.kode];
+        if (entry && entry.nama.trim()) {
+          const exists = updated.some(
+            (u) => u.role === 'wali_kelas' && normalizeKelasCode(u.kelasAjar || 'V') === t.kode
+          );
+          if (!exists) {
+            updated.push({
+              id: `user-wali-${t.angka}`,
+              nama: entry.nama.trim(),
+              nip: entry.nip || '-',
+              role: 'wali_kelas',
+              kelasAjar: t.kode,
+              password: 'wali123',
+            });
+          }
+        }
+      });
+
+      // Tambahkan akun Guru Mapel baru jika mapel tsb belum memiliki akun
+      (finalSekolah.guruMapelList || []).forEach((gm) => {
+        if (gm.nama.trim()) {
+          const exists = updated.some(
+            (u) => u.role === 'guru_mapel' && u.kodeMapel === gm.kodeMapel
+          );
+          if (!exists) {
+            updated.push({
+              id: `user-gm-${gm.kodeMapel.toLowerCase()}`,
+              nama: gm.nama.trim(),
+              nip: gm.nip || '-',
+              role: 'guru_mapel',
+              kodeMapel: gm.kodeMapel,
+              namaMapel: gm.namaMapel,
+              password: 'guru123',
+            });
+          }
+        }
+      });
+
+      return updated;
+    });
+  };
+
   const handlePrint = () => {
     window.print();
   };
@@ -653,14 +828,7 @@ export default function App() {
         sekolah={sekolah}
         users={userAccounts}
         kurikulum={kurikulum}
-        onLoginSuccess={(newSession) => {
-          setUserSession(newSession);
-          if (newSession.role === 'admin') {
-            setActiveTab('guru_manager');
-          } else {
-            setActiveTab('dashboard');
-          }
-        }}
+        onLoginSuccess={applySessionAndRoute}
       />
     );
   }
@@ -675,7 +843,7 @@ export default function App() {
         activeTab={activeTab}
         onSelectTab={setActiveTab}
         sekolah={sekolah}
-        siswaList={siswaList}
+        siswaList={scopedSiswaList}
         selectedNis={selectedNis}
         onSelectNis={setSelectedNis}
         semester={semester}
@@ -860,7 +1028,7 @@ export default function App() {
           {activeTab === 'dashboard' && (
             <DashboardOverview
               sekolah={sekolah}
-              siswaList={siswaList}
+              siswaList={scopedSiswaList}
               selectedNis={selectedNis}
               onSelectNis={setSelectedNis}
               semester={semester}
@@ -868,7 +1036,9 @@ export default function App() {
               onOpenGasModal={() => setIsGasModalOpen(true)}
               onOpenAbsensiModal={() => setIsAbsensiModalOpen(true)}
               onOpenRoleModal={() => setIsRoleModalOpen(true)}
-              legerRows={legerRows}
+              onUpdateSekolah={handleUpdateSekolahAndSyncUsers}
+              onOpenSettingsModal={() => setIsSettingsOpen(true)}
+              legerRows={scopedLegerRows}
               kurikulum={kurikulum}
               nilaiFormatif={nilaiFormatif}
               nilaiSumatif={nilaiSumatif}
@@ -931,38 +1101,50 @@ export default function App() {
               </div>
 
               {/* Rapor Print Canvas Container */}
-              <div className="transition-all">
-                {printSubTab === 'inti' ? (
-                  <PrintRaporInti
-                    siswa={activeSiswa}
-                    sekolah={sekolah}
-                    semester={semester}
-                    daftarNilaiMapel={calculatedMapelsForActiveSiswa}
-                    kokurikuler={currentKokurikuler}
-                    ekstrakurikuler={currentEkstrakurikuler}
-                    absensi={currentAbsensi}
-                    customCatatanWaliKelas={customNotes[selectedNis]}
-                    persentil={activeRankingInfo.persentil}
-                    statusKenaikan={activeStatusKenaikan.status}
-                    targetKelasLanjutan={activeStatusKenaikan.targetKelas}
-                  />
-                ) : (
-                  <PrintCover
-                    siswa={activeSiswa}
-                    sekolah={sekolah}
-                    allSiswa={siswaList}
-                    onSelectSiswa={setSelectedNis}
-                    onUpdateSiswa={handleUpdateSiswa}
-                  />
-                )}
-              </div>
+              {activeSiswa ? (
+                <div className="transition-all">
+                  {printSubTab === 'inti' ? (
+                    <PrintRaporInti
+                      siswa={activeSiswa}
+                      sekolah={sekolah}
+                      semester={semester}
+                      daftarNilaiMapel={calculatedMapelsForActiveSiswa}
+                      kokurikuler={currentKokurikuler}
+                      ekstrakurikuler={currentEkstrakurikuler}
+                      absensi={currentAbsensi}
+                      customCatatanWaliKelas={customNotes[selectedNis]}
+                      persentil={activeRankingInfo.persentil}
+                      statusKenaikan={activeStatusKenaikan.status}
+                      targetKelasLanjutan={activeStatusKenaikan.targetKelas}
+                    />
+                  ) : (
+                    <PrintCover
+                      siswa={activeSiswa}
+                      sekolah={sekolah}
+                      allSiswa={scopedSiswaList}
+                      onSelectSiswa={setSelectedNis}
+                      onUpdateSiswa={handleUpdateSiswa}
+                    />
+                  )}
+                </div>
+              ) : (
+                <div className="bg-white rounded-xl p-10 text-center border border-slate-200 shadow-xs space-y-2">
+                  <Users className="w-10 h-10 text-slate-300 mx-auto" />
+                  <h3 className="text-sm font-bold text-slate-800">
+                    Belum ada peserta didik pada kelas ini untuk dicetak
+                  </h3>
+                  <p className="text-xs text-slate-500">
+                    Silakan tambahkan data siswa melalui menu Data Siswa Lengkap.
+                  </p>
+                </div>
+              )}
             </div>
           )}
 
           {/* TAB 2: INPUT NILAI 25 TP (FORMATIF & SUMATIF) */}
           {activeTab === 'nilai' && (
             <NilaiEditor
-              siswaList={siswaList}
+              siswaList={userSession.role === 'wali_kelas' ? scopedSiswaList : siswaList}
               selectedNis={selectedNis}
               onSelectNis={setSelectedNis}
               kurikulum={kurikulum}
@@ -979,7 +1161,7 @@ export default function App() {
           {/* TAB 3: KOKURIKULER 8 DIMENSI & EKSTRA */}
           {activeTab === 'kokurikuler' && (
             <KokurikulerEditor
-              siswaList={siswaList}
+              siswaList={scopedSiswaList}
               selectedNis={selectedNis}
               onSelectNis={setSelectedNis}
               semester={semester}
@@ -998,7 +1180,7 @@ export default function App() {
           {/* TAB 4: LEGER & PERINGKAT TERSELUBUNG */}
           {activeTab === 'leger' && (
             <LegerTable
-              rows={legerRows}
+              rows={scopedLegerRows}
               semester={semester}
               kurikulum={kurikulum}
               onUpdateCustomCatatan={handleUpdateCustomCatatan}
@@ -1009,7 +1191,7 @@ export default function App() {
           {/* TAB 5: DATA SISWA LENGKAP (MANUAL & MASSAL) */}
           {activeTab === 'siswa' && (
             <DataSiswaManager
-              siswaList={siswaList}
+              siswaList={scopedSiswaList}
               selectedNis={selectedNis}
               onSelectNis={setSelectedNis}
               onAddSiswa={handleAddSiswa}
@@ -1017,6 +1199,8 @@ export default function App() {
               onUpdateSiswa={handleUpdateSiswa}
               onDeleteSiswa={handleDeleteSiswa}
               onNavigateToPrint={handleNavigateToPrint}
+              userSession={userSession}
+              onNavigateToNilai={() => setActiveTab('nilai')}
             />
           )}
 
@@ -1025,6 +1209,7 @@ export default function App() {
             <MasterKurikulumView
               kurikulum={kurikulum}
               onUpdateMapel={handleUpdateMapelKurikulum}
+              userSession={userSession}
             />
           )}
 
@@ -1037,7 +1222,7 @@ export default function App() {
               onAddUser={handleAddUser}
               onUpdateUser={handleUpdateUser}
               onDeleteUser={handleDeleteUser}
-              onSwitchSession={(session) => setUserSession(session)}
+              onSwitchSession={applySessionAndRoute}
             />
           )}
         </main>
@@ -1047,7 +1232,7 @@ export default function App() {
       <AbsensiIntegrationModal
         isOpen={isAbsensiModalOpen}
         onClose={() => setIsAbsensiModalOpen(false)}
-        siswaList={siswaList}
+        siswaList={scopedSiswaList}
         absensiList={absensiList}
         semester={semester}
         onUpdateBulkAbsensi={handleUpdateBulkAbsensi}
@@ -1059,9 +1244,11 @@ export default function App() {
         isOpen={isRoleModalOpen}
         onClose={() => setIsRoleModalOpen(false)}
         currentSession={userSession}
-        onSwitchSession={(newSession) => setUserSession(newSession)}
+        onSwitchSession={applySessionAndRoute}
         kurikulum={kurikulum}
         namaWaliKelas={sekolah.namaWaliKelas}
+        sekolah={sekolah}
+        users={userAccounts}
       />
 
       {/* MODAL: GOOGLE SHEETS HEADERS, CODE.GS & CLOUDFLARE */}
@@ -1222,20 +1409,37 @@ export default function App() {
               <div className="border-t border-slate-200 pt-3">
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="block font-semibold text-slate-700 mb-1">Nama Wali Kelas:</label>
+                    <label className="block font-semibold text-slate-700 mb-1">Nama Wali Kelas Default (Kelas V):</label>
                     <input
                       type="text"
                       value={sekolah.namaWaliKelas}
-                      onChange={(e) => setSekolah({ ...sekolah, namaWaliKelas: e.target.value })}
+                      onChange={(e) =>
+                        handleUpdateSekolahAndSyncUsers({
+                          ...sekolah,
+                          namaWaliKelas: e.target.value,
+                        })
+                      }
                       className="w-full bg-slate-50 border border-slate-300 rounded-lg p-2 font-medium"
                     />
                   </div>
                   <div>
-                    <label className="block font-semibold text-slate-700 mb-1">NIP Wali Kelas:</label>
+                    <label className="block font-semibold text-slate-700 mb-1">NIP Wali Kelas (Kelas V):</label>
                     <input
                       type="text"
                       value={sekolah.nipWaliKelas}
-                      onChange={(e) => setSekolah({ ...sekolah, nipWaliKelas: e.target.value })}
+                      onChange={(e) =>
+                        handleUpdateSekolahAndSyncUsers({
+                          ...sekolah,
+                          nipWaliKelas: e.target.value,
+                          waliKelasPerTingkat: {
+                            ...(sekolah.waliKelasPerTingkat || {}),
+                            V: {
+                              nama: sekolah.waliKelasPerTingkat?.V?.nama || sekolah.namaWaliKelas,
+                              nip: e.target.value,
+                            },
+                          },
+                        })
+                      }
                       placeholder="-"
                       className="w-full bg-slate-50 border border-slate-300 rounded-lg p-2"
                     />
@@ -1264,6 +1468,172 @@ export default function App() {
                       className="w-full bg-slate-50 border border-slate-300 rounded-lg p-2"
                     />
                   </div>
+                </div>
+              </div>
+
+              {/* Pengaturan Daftar Wali Kelas 1 s.d. 6 */}
+              <div className="border-t border-slate-200 pt-3 space-y-2">
+                <div className="flex items-center gap-1.5 font-bold text-slate-800">
+                  <UserCheck className="w-4 h-4 text-indigo-600" />
+                  <span>Master Wali Kelas 1 s.d. 6 (Acuan Penanda Tangan Rapor):</span>
+                </div>
+                <div className="space-y-2">
+                  {TINGKAT_KELAS_SD.map((t) => {
+                    const entry = sekolah.waliKelasPerTingkat?.[t.kode] || { nama: '', nip: '-' };
+                    return (
+                      <div key={t.kode} className="grid grid-cols-12 gap-2 items-center bg-slate-50 p-2 rounded-lg border border-slate-200">
+                        <div className="col-span-3 font-bold text-slate-700">
+                          Kelas {t.angka} ({t.fase})
+                        </div>
+                        <div className="col-span-5">
+                          <input
+                            type="text"
+                            value={entry.nama}
+                            onChange={(e) => {
+                              const nextMap = {
+                                ...(sekolah.waliKelasPerTingkat || {}),
+                                [t.kode]: { ...entry, nama: e.target.value },
+                              };
+                              handleUpdateSekolahAndSyncUsers({
+                                ...sekolah,
+                                waliKelasPerTingkat: nextMap,
+                                namaWaliKelas: t.kode === 'V' ? e.target.value : sekolah.namaWaliKelas,
+                              });
+                            }}
+                            placeholder={`Nama Wali Kelas ${t.angka}...`}
+                            className="w-full bg-white border border-slate-300 rounded px-2 py-1 font-medium"
+                          />
+                        </div>
+                        <div className="col-span-4">
+                          <input
+                            type="text"
+                            value={entry.nip}
+                            onChange={(e) => {
+                              const nextMap = {
+                                ...(sekolah.waliKelasPerTingkat || {}),
+                                [t.kode]: { ...entry, nip: e.target.value },
+                              };
+                              handleUpdateSekolahAndSyncUsers({
+                                ...sekolah,
+                                waliKelasPerTingkat: nextMap,
+                                nipWaliKelas: t.kode === 'V' ? e.target.value : sekolah.nipWaliKelas,
+                              });
+                            }}
+                            placeholder="NIP..."
+                            className="w-full bg-white border border-slate-300 rounded px-2 py-1"
+                          />
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Pengaturan Daftar Guru Mapel */}
+              <div className="border-t border-slate-200 pt-3 space-y-2">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-1.5 font-bold text-slate-800">
+                    <BookOpen className="w-4 h-4 text-amber-600" />
+                    <span>Master Guru Mata Pelajaran:</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const def = kurikulum[0];
+                      handleUpdateSekolahAndSyncUsers({
+                        ...sekolah,
+                        guruMapelList: [
+                          ...(sekolah.guruMapelList || []),
+                          {
+                            id: `gm-${Date.now()}`,
+                            kodeMapel: def?.kodeMapel || 'PAK-01',
+                            namaMapel: def?.namaMapel || 'Pendidikan Agama',
+                            nama: '',
+                            nip: '-',
+                          },
+                        ],
+                      });
+                    }}
+                    className="px-2 py-1 bg-amber-600 hover:bg-amber-700 text-white rounded text-[11px] font-bold flex items-center gap-1"
+                  >
+                    <Plus className="w-3 h-3" /> Tambah
+                  </button>
+                </div>
+                <div className="space-y-2">
+                  {(sekolah.guruMapelList || []).map((gm) => (
+                    <div key={gm.id} className="grid grid-cols-12 gap-1.5 items-center bg-slate-50 p-2 rounded-lg border border-slate-200">
+                      <div className="col-span-4">
+                        <select
+                          value={gm.kodeMapel}
+                          onChange={(e) => {
+                            const mapelObj = kurikulum.find((m) => m.kodeMapel === e.target.value);
+                            handleUpdateSekolahAndSyncUsers({
+                              ...sekolah,
+                              guruMapelList: (sekolah.guruMapelList || []).map((item) =>
+                                item.id === gm.id
+                                  ? { ...item, kodeMapel: e.target.value, namaMapel: mapelObj?.namaMapel || item.namaMapel }
+                                  : item
+                              ),
+                            });
+                          }}
+                          className="w-full bg-white border border-slate-300 rounded px-1.5 py-1 font-bold"
+                        >
+                          {kurikulum.map((m) => (
+                            <option key={m.kodeMapel} value={m.kodeMapel}>
+                              {m.kodeMapel} - {m.namaMapel}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      <div className="col-span-4">
+                        <input
+                          type="text"
+                          value={gm.nama}
+                          onChange={(e) =>
+                            handleUpdateSekolahAndSyncUsers({
+                              ...sekolah,
+                              guruMapelList: (sekolah.guruMapelList || []).map((item) =>
+                                item.id === gm.id ? { ...item, nama: e.target.value } : item
+                              ),
+                            })
+                          }
+                          placeholder="Nama Guru..."
+                          className="w-full bg-white border border-slate-300 rounded px-2 py-1 font-medium"
+                        />
+                      </div>
+                      <div className="col-span-3">
+                        <input
+                          type="text"
+                          value={gm.nip}
+                          onChange={(e) =>
+                            handleUpdateSekolahAndSyncUsers({
+                              ...sekolah,
+                              guruMapelList: (sekolah.guruMapelList || []).map((item) =>
+                                item.id === gm.id ? { ...item, nip: e.target.value } : item
+                              ),
+                            })
+                          }
+                          placeholder="NIP..."
+                          className="w-full bg-white border border-slate-300 rounded px-2 py-1"
+                        />
+                      </div>
+                      <div className="col-span-1 flex justify-end">
+                        <button
+                          type="button"
+                          onClick={() =>
+                            handleUpdateSekolahAndSyncUsers({
+                              ...sekolah,
+                              guruMapelList: (sekolah.guruMapelList || []).filter((item) => item.id !== gm.id),
+                            })
+                          }
+                          className="p-1 text-rose-600 hover:bg-rose-50 rounded"
+                          title="Hapus"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
                 </div>
               </div>
 
@@ -1297,7 +1667,7 @@ export default function App() {
                 onClick={() => setIsSettingsOpen(false)}
                 className="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-xl shadow-xs transition"
               >
-                Simpan & Tutup
+                Simpan &amp; Tutup
               </button>
             </div>
           </div>

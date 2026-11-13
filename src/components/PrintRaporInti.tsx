@@ -7,7 +7,11 @@ import {
   ProfilSekolah,
   RaporMapelKalkulasi,
 } from '../types/rapor';
-import { generateCatatanWaliKelas, sintesisNarasiKokurikuler } from '../utils/raporCalculations';
+import {
+  generateCatatanWaliKelas,
+  getWaliKelasForSiswa,
+  sintesisNarasiKokurikuler,
+} from '../utils/raporCalculations';
 
 interface PrintRaporIntiProps {
   siswa: DataSiswa;
@@ -37,6 +41,7 @@ export const PrintRaporInti: React.FC<PrintRaporIntiProps> = ({
   targetKelasLanjutan = 'V (Lima)',
 }) => {
   const catatanFinal = generateCatatanWaliKelas(persentil, customCatatanWaliKelas);
+  const waliKelasSignatory = getWaliKelasForSiswa(sekolah, siswa.kelas);
 
   // Group Mapel Umum vs Muatan Lokal
   const mapelUmum = daftarNilaiMapel.filter((m) => m.kelompok !== 'Muatan Lokal');
@@ -423,10 +428,10 @@ export const PrintRaporInti: React.FC<PrintRaporIntiProps> = ({
             </div>
             <div>
               <p className="font-bold text-black">
-                {sekolah.namaWaliKelas}
+                {waliKelasSignatory.nama}
               </p>
               <p className="text-[11px] text-black">
-                NIP. {sekolah.nipWaliKelas !== '-' ? sekolah.nipWaliKelas : '-'}
+                NIP. {waliKelasSignatory.nip !== '-' ? waliKelasSignatory.nip : '-'}
               </p>
             </div>
           </div>

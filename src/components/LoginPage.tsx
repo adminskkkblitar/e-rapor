@@ -1,13 +1,12 @@
 import React, { useState } from 'react';
-import { MasterKurikulumMapel, ProfilSekolah, UserAccount, UserRole, UserSession } from '../types/rapor';
+import { MasterKurikulumMapel, ProfilSekolah, TingkatKelasSD, UserAccount, UserRole, UserSession } from '../types/rapor';
+import { TINGKAT_KELAS_SD, getFaseFromKelas, getWaliKelasForSiswa, normalizeKelasCode } from '../utils/raporCalculations';
 import {
-  GraduationCap,
   KeyRound,
   Lock,
   LogIn,
   ShieldCheck,
   UserCheck,
-  Users,
   AlertCircle,
   Eye,
   EyeOff,
@@ -34,6 +33,9 @@ export const LoginPage: React.FC<LoginPageProps> = ({
   // Selected or typed teacher name
   const [namaGuru, setNamaGuru] = useState<string>('Petrus Apriprasetyo, S.Pd');
   const [selectedUserId, setSelectedUserId] = useState<string>('user-wali');
+
+  // Selected class if Wali Kelas
+  const [kelasWali, setKelasWali] = useState<TingkatKelasSD>('V');
   
   // Selected subject if Guru Mapel
   const [kodeMapel, setKodeMapel] = useState<string>('PAK-01');
@@ -53,10 +55,33 @@ export const LoginPage: React.FC<LoginPageProps> = ({
     setNamaGuru(user.nama);
     setSelectedRole(user.role);
     setPassword(user.password);
+    if (user.role === 'wali_kelas') {
+      setKelasWali(normalizeKelasCode(user.kelasAjar || 'V'));
+    }
     if (user.kodeMapel) {
       setKodeMapel(user.kodeMapel);
     }
     setErrorMessage('');
+  };
+
+  // Handle changing class for Wali Kelas
+  const handleSelectKelasWali = (kelas: TingkatKelasSD) => {
+    setKelasWali(kelas);
+    setErrorMessage('');
+    const matchedWali = users.find(
+      (u) => u.role === 'wali_kelas' && normalizeKelasCode(u.kelasAjar || 'V') === kelas
+    );
+    if (matchedWali) {
+      setSelectedUserId(matchedWali.id);
+      setNamaGuru(matchedWali.nama);
+      setPassword(matchedWali.password);
+    } else {
+      const fromSekolah = getWaliKelasForSiswa(sekolah, kelas);
+      if (fromSekolah.nama && fromSekolah.nama !== '-') {
+        setNamaGuru(fromSekolah.nama);
+      }
+      setPassword('wali123');
+    }
   };
 
   // Handle role change
@@ -65,18 +90,23 @@ export const LoginPage: React.FC<LoginPageProps> = ({
     setErrorMessage('');
     
     // Suggest matching teacher
-    const match = users.find((u) => u.role === role);
+    const match =
+      role === 'wali_kelas'
+        ? users.find((u) => u.role === 'wali_kelas' && normalizeKelasCode(u.kelasAjar || 'V') === kelasWali) ||
+          users.find((u) => u.role === 'wali_kelas')
+        : users.find((u) => u.role === role);
     if (match) {
       setSelectedUserId(match.id);
       setNamaGuru(match.nama);
       setPassword(match.password);
+      if (match.role === 'wali_kelas') setKelasWali(normalizeKelasCode(match.kelasAjar || 'V'));
       if (match.kodeMapel) setKodeMapel(match.kodeMapel);
     } else {
       if (role === 'admin') {
         setNamaGuru('Dian Natalia Widiasih, S.Psi');
         setPassword('admin123');
       } else if (role === 'wali_kelas') {
-        setNamaGuru('Petrus Apriprasetyo, S.Pd');
+        setNamaGuru(getWaliKelasForSiswa(sekolah, kelasWali).nama || 'Petrus Apriprasetyo, S.Pd');
         setPassword('wali123');
       } else {
         setNamaGuru('Budi Hartono, S.Th');
@@ -104,6 +134,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({
     // Check against registered users
     const matchedUser = users.find(
       (u) =>
+        (u.nama.toLowerCase().trim() === namaGuru.toLowerCase().trim() && u.role === selectedRole) ||
         u.nama.toLowerCase().trim() === namaGuru.toLowerCase().trim() ||
         (u.id === selectedUserId && u.role === selectedRole)
     );
@@ -120,7 +151,8 @@ export const LoginPage: React.FC<LoginPageProps> = ({
         isLoggedIn: true,
         userId: matchedUser.id,
         role: selectedRole,
-        namaUser: matchedUser.nama,
+        namaUser: namaGuru.trim() || matchedUser.nama,
+        kelasAjar: selectedRole === 'wali_kelas' ? kelasWali : undefined,
         kodeMapelAjar: selectedRole === 'guru_mapel' ? (matchedUser.kodeMapel || kodeMapel) : undefined,
         namaMapelAjar: selectedRole === 'guru_mapel' ? (matchedUser.namaMapel || mapelObj?.namaMapel) : undefined,
       });
@@ -134,13 +166,14 @@ export const LoginPage: React.FC<LoginPageProps> = ({
       userId: `user-${Date.now()}`,
       role: selectedRole,
       namaUser: namaGuru,
+      kelasAjar: selectedRole === 'wali_kelas' ? kelasWali : undefined,
       kodeMapelAjar: selectedRole === 'guru_mapel' ? kodeMapel : undefined,
       namaMapelAjar: selectedRole === 'guru_mapel' ? mapelObj?.namaMapel : undefined,
     });
   };
 
   // Quick Demo Login helper
-  const handleQuickLogin = (role: UserRole) => {
+  const handleQuickLogin = (role: UserRole, presetKelas?: TingkatKelasSD) => {
     if (role === 'admin') {
       onLoginSuccess({
         isLoggedIn: true,
@@ -149,11 +182,17 @@ export const LoginPage: React.FC<LoginPageProps> = ({
         namaUser: 'Dian Natalia Widiasih, S.Psi',
       });
     } else if (role === 'wali_kelas') {
+      const targetKelas = presetKelas || 'V';
+      const waliAccount = users.find(
+        (u) => u.role === 'wali_kelas' && normalizeKelasCode(u.kelasAjar || 'V') === targetKelas
+      );
+      const waliProfil = getWaliKelasForSiswa(sekolah, targetKelas);
       onLoginSuccess({
         isLoggedIn: true,
-        userId: 'user-wali',
+        userId: waliAccount?.id || `user-wali-${targetKelas}`,
         role: 'wali_kelas',
-        namaUser: 'Petrus Apriprasetyo, S.Pd',
+        namaUser: waliAccount?.nama || waliProfil.nama || 'Petrus Apriprasetyo, S.Pd',
+        kelasAjar: targetKelas,
       });
     } else {
       onLoginSuccess({
@@ -287,7 +326,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({
                       .filter((u) => u.role === 'wali_kelas')
                       .map((u) => (
                         <option key={u.id} value={u.id} className="bg-slate-900 text-white">
-                          👨‍🏫 {u.nama} (Wali Kelas V)
+                          👨‍🏫 {u.nama} (Wali Kelas {u.kelasAjar || 'V'} • {getFaseFromKelas(u.kelasAjar || 'V')})
                         </option>
                       ))}
                   </optgroup>
@@ -313,6 +352,29 @@ export const LoginPage: React.FC<LoginPageProps> = ({
               />
             </div>
 
+            {/* 3. Tingkat Kelas (Khusus Wali Kelas) */}
+            {selectedRole === 'wali_kelas' && (
+              <div className="p-3.5 bg-indigo-950/40 border border-indigo-500/30 rounded-xl space-y-1.5">
+                <label className="block text-xs font-bold text-indigo-200">
+                  3. Kelas yang Diampu (Wali Kelas Tingkat I–VI):
+                </label>
+                <select
+                  value={kelasWali}
+                  onChange={(e) => handleSelectKelasWali(e.target.value as TingkatKelasSD)}
+                  className="w-full bg-slate-900 border border-indigo-500/40 rounded-lg px-3 py-2 text-xs font-bold text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                >
+                  {TINGKAT_KELAS_SD.map((t) => (
+                    <option key={t.kode} value={t.kode}>
+                      {t.label} — {t.fase}
+                    </option>
+                  ))}
+                </select>
+                <p className="text-[11px] text-slate-400">
+                  Akses otomatis diarahkan dan dikunci khusus ke Data Siswa &amp; Rapor Kelas {kelasWali} ({getFaseFromKelas(kelasWali)}).
+                </p>
+              </div>
+            )}
+
             {/* 3. Mata Pelajaran yang Diajar (Khusus Guru Mapel) */}
             {selectedRole === 'guru_mapel' && (
               <div className="p-3.5 bg-indigo-950/40 border border-indigo-500/30 rounded-xl space-y-1.5 animate-fadeIn">
@@ -331,7 +393,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({
                   ))}
                 </select>
                 <p className="text-[11px] text-slate-400">
-                  Guru mapel hanya dapat melihat dan mengedit nilai untuk mata pelajaran ini.
+                  Guru mapel hanya dapat mengedit mata pelajaran ini untuk seluruh kelas (Kelas 1 s.d. 6).
                 </p>
               </div>
             )}
@@ -340,7 +402,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({
             <div>
               <div className="flex items-center justify-between mb-1.5">
                 <label className="block text-xs font-bold uppercase tracking-wider text-slate-300">
-                  {selectedRole === 'guru_mapel' ? '4.' : '3.'} Password:
+                  {selectedRole === 'guru_mapel' || selectedRole === 'wali_kelas' ? '4.' : '3.'} Password:
                 </label>
                 <span className="text-[11px] text-slate-400">
                   Default:{' '}
@@ -390,27 +452,34 @@ export const LoginPage: React.FC<LoginPageProps> = ({
             <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400 block mb-2.5">
               Akses Cepat (Demo Langsung 1-Klik):
             </span>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
               <button
                 type="button"
-                onClick={() => handleQuickLogin('wali_kelas')}
+                onClick={() => handleQuickLogin('wali_kelas', 'I')}
+                className="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-sky-300 border border-slate-700 rounded-lg text-[11px] font-semibold transition"
+              >
+                👨‍🏫 Wali Kelas 1
+              </button>
+              <button
+                type="button"
+                onClick={() => handleQuickLogin('wali_kelas', 'V')}
                 className="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-indigo-300 border border-slate-700 rounded-lg text-[11px] font-semibold transition"
               >
-                👨‍🏫 Wali Kelas
+                👨‍🏫 Wali Kelas 5
               </button>
               <button
                 type="button"
                 onClick={() => handleQuickLogin('guru_mapel')}
                 className="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-amber-300 border border-slate-700 rounded-lg text-[11px] font-semibold transition"
               >
-                📚 Guru Mapel (PJOK)
+                📚 Guru PJOK
               </button>
               <button
                 type="button"
                 onClick={() => handleQuickLogin('admin')}
                 className="px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-emerald-300 border border-slate-700 rounded-lg text-[11px] font-semibold transition"
               >
-                🛡️ Administrator
+                🛡️ Admin
               </button>
             </div>
           </div>

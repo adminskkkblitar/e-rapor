@@ -33,6 +33,8 @@ export interface DataSiswa {
 
 export type FaseKurikulum = 'Fase A' | 'Fase B' | 'Fase C';
 
+export type TingkatKelasSD = 'I' | 'II' | 'III' | 'IV' | 'V' | 'VI';
+
 export interface ElemenCapaian {
   elemen: string;
   subElemen?: string;
@@ -61,6 +63,9 @@ export interface MasterKurikulumMapel {
   cp: string; // Capaian Pembelajaran aktif
   atp: string; // Alur Tujuan Pembelajaran aktif
   tpNarasi: string[]; // 25 Teks Narasi TP (index 0 = TP_1, index 24 = TP_25)
+  tpNarasiFaseA?: string[];
+  tpNarasiFaseB?: string[];
+  tpNarasiFaseC?: string[];
   faseAktif?: FaseKurikulum;
   cpFaseA?: string;
   cpFaseB?: string;
@@ -139,6 +144,21 @@ export interface LegerNilaiSiswa {
   targetKelasLanjutan?: string;
 }
 
+export interface PenugasanWaliKelasItem {
+  nama: string;
+  nip: string;
+}
+
+export type WaliKelasPerTingkatMap = Partial<Record<TingkatKelasSD, PenugasanWaliKelasItem>>;
+
+export interface PenugasanGuruMapelItem {
+  id: string;
+  kodeMapel: string;
+  namaMapel: string;
+  nama: string;
+  nip: string;
+}
+
 export interface ProfilSekolah {
   namaSekolah: string;
   npsn: string;
@@ -155,6 +175,8 @@ export interface ProfilSekolah {
   nipKepalaSekolah: string;
   namaWaliKelas: string;
   nipWaliKelas: string;
+  waliKelasPerTingkat?: WaliKelasPerTingkatMap;
+  guruMapelList?: PenugasanGuruMapelItem[];
   titimangsaTempat: string;
   titimangsaTanggal: string;
   tahunPelajaran: string;
@@ -184,6 +206,7 @@ export interface UserAccount {
   nama: string;
   nip?: string;
   role: UserRole;
+  kelasAjar?: TingkatKelasSD;
   kodeMapel?: string;
   namaMapel?: string;
   password: string;
@@ -195,6 +218,7 @@ export interface UserSession {
   userId: string;
   role: UserRole;
   namaUser: string;
+  kelasAjar?: TingkatKelasSD;
   kodeMapelAjar?: string;
   namaMapelAjar?: string;
 }

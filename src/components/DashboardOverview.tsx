@@ -1,13 +1,22 @@
-import React, { useState, useMemo } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   DataSiswa,
   MasterKurikulumMapel,
   NilaiFormatifSiswa,
   NilaiSumatifSiswa,
+  PenugasanGuruMapelItem,
   ProfilSekolah,
+  TingkatKelasSD,
   UserSession,
 } from '../types/rapor';
 import { LegerRowData } from './LegerTable';
+import {
+  TINGKAT_KELAS_SD,
+  getFaseFromKelas,
+  getTargetKelasLanjutan,
+  getWaliKelasForSiswa,
+  normalizeKelasCode,
+} from '../utils/raporCalculations';
 import {
   AlertCircle,
   ArrowRight,
@@ -19,19 +28,19 @@ import {
   ChevronRight,
   Clock,
   Compass,
-  Database,
   EyeOff,
   FileCheck,
-  GraduationCap,
-  Layers,
-  Lock,
-  PieChart,
+  Plus,
   Printer,
+  Save,
   School,
+  Settings,
   ShieldCheck,
   Sparkles,
+  Trash2,
   TrendingUp,
   UserCheck,
+  UserCog,
   Users,
 } from 'lucide-react';
 
@@ -45,6 +54,8 @@ interface DashboardOverviewProps {
   onOpenGasModal: () => void;
   onOpenAbsensiModal?: () => void;
   onOpenRoleModal?: () => void;
+  onUpdateSekolah?: (updated: ProfilSekolah) => void;
+  onOpenSettingsModal?: () => void;
   legerRows: LegerRowData[];
   kurikulum?: MasterKurikulumMapel[];
   nilaiFormatif?: NilaiFormatifSiswa[];
@@ -60,13 +71,12 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
   onSelectNis,
   semester,
   onSelectTab,
-  onOpenGasModal,
   onOpenAbsensiModal,
   onOpenRoleModal,
+  onUpdateSekolah,
+  onOpenSettingsModal,
   legerRows,
   kurikulum = [],
-  nilaiFormatif = [],
-  nilaiSumatif = [],
   userSession,
   onSelectMapelForNilai,
 }) => {
@@ -74,10 +84,31 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
   // 'overview' = Ikhtisar Lengkap & Roster Siswa
   // 'progres' = Progres Pengisian Nilai (Umum & Per Mapel)
   // 'rata_rata' = Statistik & Nilai Rata-Rata Per Mapel
-  const [dashboardView, setDashboardView] = useState<'overview' | 'progres' | 'rata_rata'>('overview');
+  // 'penugasan' = Identitas Sekolah, Wali Kelas 1-6 & Guru Mapel
+  const [dashboardView, setDashboardView] = useState<'overview' | 'progres' | 'rata_rata' | 'penugasan'>('overview');
+
+  // Draft state for School Identity & Teacher Assignments
+  const [draftSekolah, setDraftSekolah] = useState<ProfilSekolah>(sekolah);
+  const [saveSuccessMsg, setSaveSuccessMsg] = useState<string | null>(null);
+
+  useEffect(() => {
+    setDraftSekolah(sekolah);
+  }, [sekolah]);
 
   const activeSiswa = siswaList.find((s) => s.nis === selectedNis) || siswaList[0];
   const totalSiswa = siswaList.length;
+
+  const isWaliKelas = userSession?.role === 'wali_kelas';
+  const isGuruMapel = userSession?.role === 'guru_mapel';
+  const activeKelasKode: TingkatKelasSD = isWaliKelas
+    ? normalizeKelasCode(userSession?.kelasAjar || activeSiswa?.kelas || 'V')
+    : normalizeKelasCode(activeSiswa?.kelas || 'V');
+  const activeFaseLabel = getFaseFromKelas(activeKelasKode);
+  const targetKenaikanLabel = getTargetKelasLanjutan(activeKelasKode);
+  const distinctClassesCount = useMemo(
+    () => new Set(siswaList.map((s) => normalizeKelasCode(s.kelas))).size,
+    [siswaList]
+  );
 
   // Hitung Nilai Rata-rata Kelas Keseluruhan
   const avgClass = useMemo(() => {
@@ -138,7 +169,7 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
         sbCount,
         bCount,
         pbCount,
-        isCompleted: progressPercent === 100,
+        isCompleted: progressPercent === 100 && totalSiswa > 0,
         isPartiallyFilled: progressPercent > 0 && progressPercent < 100,
       };
     });
@@ -161,6 +192,91 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
       onSelectMapelForNilai(kodeMapel);
     }
     onSelectTab('nilai');
+  };
+
+  // Handlers for Master Wali Kelas 1-6 & Guru Mapel
+  const handleUpdateDraftWaliKelas = (
+    kelas: TingkatKelasSD,
+    field: 'nama' | 'nip',
+    value: string
+  ) => {
+    setDraftSekolah((prev) => {
+      const currentMap = prev.waliKelasPerTingkat || {};
+      const currentEntry = currentMap[kelas] || { nama: '', nip: '-' };
+      const updatedMap = {
+        ...currentMap,
+        [kelas]: {
+          ...currentEntry,
+          [field]: value,
+        },
+      };
+      return {
+        ...prev,
+        waliKelasPerTingkat: updatedMap,
+        namaWaliKelas:
+          kelas === 'V' && field === 'nama' ? value : prev.namaWaliKelas,
+        nipWaliKelas:
+          kelas === 'V' && field === 'nip' ? value : prev.nipWaliKelas,
+      };
+    });
+  };
+
+  const handleUpdateDraftGuruMapel = (
+    id: string,
+    field: keyof PenugasanGuruMapelItem,
+    value: string
+  ) => {
+    setDraftSekolah((prev) => {
+      const list = prev.guruMapelList || [];
+      return {
+        ...prev,
+        guruMapelList: list.map((item) => {
+          if (item.id !== id) return item;
+          if (field === 'kodeMapel') {
+            const mapelObj = kurikulum.find((m) => m.kodeMapel === value);
+            return {
+              ...item,
+              kodeMapel: value,
+              namaMapel: mapelObj?.namaMapel || item.namaMapel,
+            };
+          }
+          return { ...item, [field]: value };
+        }),
+      };
+    });
+  };
+
+  const handleAddDraftGuruMapel = () => {
+    const defaultMapel = kurikulum[0];
+    const newItem: PenugasanGuruMapelItem = {
+      id: `gm-${Date.now()}`,
+      kodeMapel: defaultMapel?.kodeMapel || 'PAK-01',
+      namaMapel: defaultMapel?.namaMapel || 'Pendidikan Agama dan Budi Pekerti',
+      nama: '',
+      nip: '-',
+    };
+    setDraftSekolah((prev) => ({
+      ...prev,
+      guruMapelList: [...(prev.guruMapelList || []), newItem],
+    }));
+  };
+
+  const handleDeleteDraftGuruMapel = (id: string) => {
+    setDraftSekolah((prev) => ({
+      ...prev,
+      guruMapelList: (prev.guruMapelList || []).filter((item) => item.id !== id),
+    }));
+  };
+
+  const handleSavePenugasanSekolah = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (onUpdateSekolah) {
+      onUpdateSekolah(draftSekolah);
+      setSaveSuccessMsg(
+        'Identitas Sekolah, Daftar Wali Kelas (1–6), dan Guru Mapel berhasil disimpan & disinkronkan ke hak akses dan penanda tangan rapor.'
+      );
+      setTimeout(() => setSaveSuccessMsg(null), 5000);
+    }
   };
 
   return (
@@ -186,24 +302,33 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
                   className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold border transition ${
                     userSession.role === 'wali_kelas'
                       ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30 hover:bg-emerald-500/30'
+                      : userSession.role === 'admin'
+                      ? 'bg-sky-500/20 text-sky-300 border-sky-500/30 hover:bg-sky-500/30'
                       : 'bg-amber-500/20 text-amber-300 border-amber-500/30 hover:bg-amber-500/30'
                   }`}
                   title="Klik untuk mengganti peran pengguna"
                 >
                   <ShieldCheck className="w-3.5 h-3.5" />
                   {userSession.role === 'wali_kelas'
-                    ? `Wali Kelas: ${userSession.namaUser}`
-                    : `Guru: ${userSession.namaMapelAjar || userSession.namaUser}`}
+                    ? `Wali Kelas ${activeKelasKode} (${activeFaseLabel}): ${userSession.namaUser}`
+                    : userSession.role === 'admin'
+                    ? `Administrator: ${userSession.namaUser}`
+                    : `Guru: ${userSession.namaMapelAjar || userSession.namaUser} (Kelas I–VI)`}
                 </button>
               )}
             </div>
 
             <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-white">
-              Selamat Bertugas, {userSession?.namaUser || sekolah.namaWaliKelas}
+              Selamat Bertugas, {userSession?.namaUser || getWaliKelasForSiswa(sekolah, activeKelasKode).nama}
             </h1>
 
             <p className="text-sm text-slate-300 leading-relaxed">
-              Wali Kelas {activeSiswa.kelas} • <strong>{sekolah.namaSekolah}</strong> ({sekolah.alamatSekolah}, {sekolah.kelurahan}, {sekolah.kecamatan}, {sekolah.kotaKabupaten}).
+              {isWaliKelas
+                ? `Wali Kelas ${activeKelasKode} (${activeFaseLabel})`
+                : isGuruMapel
+                ? `Guru Mata Pelajaran ${userSession?.namaMapelAjar || userSession?.kodeMapelAjar || ''} (Akses Kelas I–VI)`
+                : `Administrator Sekolah (Kelas I–VI)`}{' '}
+              • <strong>{sekolah.namaSekolah}</strong> ({sekolah.alamatSekolah}, {sekolah.kelurahan}, {sekolah.kecamatan}, {sekolah.kotaKabupaten}).
               Pengelolaan hasil evaluasi belajar terpadu dengan Kurikulum Deep Learning dan Kokurikuler 8 Dimensi Profil Lulusan.
             </p>
 
@@ -295,12 +420,25 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
               <TrendingUp className="w-3.5 h-3.5" />
               Rata-Rata Nilai Per Mapel
             </button>
+
+            <button
+              type="button"
+              onClick={() => setDashboardView('penugasan')}
+              className={`px-3.5 py-1.5 rounded-lg transition flex items-center gap-1.5 ${
+                dashboardView === 'penugasan'
+                  ? 'bg-indigo-600 text-white shadow-2xs'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              <UserCog className="w-3.5 h-3.5" />
+              Identitas Sekolah & Penugasan Guru
+            </button>
           </div>
         </div>
 
         <div className="flex items-center gap-2 pr-2">
           <span className="text-xs text-slate-500">
-            Total <strong>10</strong> Mata Pelajaran • <strong>{totalSiswa}</strong> Siswa
+            Total <strong>{kurikulum.length || 10}</strong> Mata Pelajaran • <strong>{totalSiswa}</strong> Siswa
           </span>
         </div>
       </div>
@@ -543,6 +681,276 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
       )}
 
       {/* ===================================================================== */}
+      {/* TAMPILAN 3: IDENTITAS SEKOLAH & PENUGASAN WALI KELAS / GURU MAPEL     */}
+      {/* ===================================================================== */}
+      {dashboardView === 'penugasan' && (
+        <form onSubmit={handleSavePenugasanSekolah} className="space-y-6">
+          {saveSuccessMsg && (
+            <div className="p-3.5 rounded-xl bg-emerald-50 border border-emerald-300 text-emerald-900 text-xs font-bold flex items-center gap-2">
+              <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+              <span>{saveSuccessMsg}</span>
+            </div>
+          )}
+
+          {/* Bagian A: Identitas Sekolah Ringkas */}
+          <div className="bg-white rounded-2xl p-6 shadow-xs border border-slate-200 space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-100">
+              <div>
+                <h3 className="text-base font-black text-slate-900 flex items-center gap-2">
+                  <School className="w-5 h-5 text-indigo-600" />
+                  Identitas Sekolah & Kepala Sekolah
+                </h3>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Data identitas sekolah dan pejabat penanda tangan pada sampul dan lembar cetak rapor.
+                </p>
+              </div>
+              {onOpenSettingsModal && (
+                <button
+                  type="button"
+                  onClick={onOpenSettingsModal}
+                  className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-bold flex items-center gap-1.5 transition"
+                >
+                  <Settings className="w-3.5 h-3.5" />
+                  Alamat & Kontak Lengkap
+                </button>
+              )}
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs">
+              <div>
+                <label className="block font-bold text-slate-700 mb-1">Nama Satuan Pendidikan:</label>
+                <input
+                  type="text"
+                  value={draftSekolah.namaSekolah}
+                  onChange={(e) => setDraftSekolah({ ...draftSekolah, namaSekolah: e.target.value })}
+                  className="w-full bg-slate-50 border border-slate-300 rounded-lg px-3 py-2 font-semibold text-slate-900"
+                />
+              </div>
+              <div>
+                <label className="block font-bold text-slate-700 mb-1">NPSN:</label>
+                <input
+                  type="text"
+                  value={draftSekolah.npsn}
+                  onChange={(e) => setDraftSekolah({ ...draftSekolah, npsn: e.target.value })}
+                  className="w-full bg-slate-50 border border-slate-300 rounded-lg px-3 py-2 text-slate-900"
+                />
+              </div>
+              <div>
+                <label className="block font-bold text-slate-700 mb-1">Tahun Pelajaran:</label>
+                <input
+                  type="text"
+                  value={draftSekolah.tahunPelajaran}
+                  onChange={(e) => setDraftSekolah({ ...draftSekolah, tahunPelajaran: e.target.value })}
+                  className="w-full bg-slate-50 border border-slate-300 rounded-lg px-3 py-2 font-semibold text-slate-900"
+                />
+              </div>
+              <div>
+                <label className="block font-bold text-slate-700 mb-1">Nama Kepala Sekolah:</label>
+                <input
+                  type="text"
+                  value={draftSekolah.namaKepalaSekolah}
+                  onChange={(e) => setDraftSekolah({ ...draftSekolah, namaKepalaSekolah: e.target.value })}
+                  className="w-full bg-slate-50 border border-slate-300 rounded-lg px-3 py-2 font-semibold text-slate-900"
+                />
+              </div>
+              <div>
+                <label className="block font-bold text-slate-700 mb-1">NIP Kepala Sekolah:</label>
+                <input
+                  type="text"
+                  value={draftSekolah.nipKepalaSekolah}
+                  onChange={(e) => setDraftSekolah({ ...draftSekolah, nipKepalaSekolah: e.target.value })}
+                  placeholder="-"
+                  className="w-full bg-slate-50 border border-slate-300 rounded-lg px-3 py-2 text-slate-900"
+                />
+              </div>
+              <div>
+                <label className="block font-bold text-slate-700 mb-1">Titimangsa (Tempat, Tanggal):</label>
+                <div className="grid grid-cols-2 gap-2">
+                  <input
+                    type="text"
+                    value={draftSekolah.titimangsaTempat}
+                    onChange={(e) => setDraftSekolah({ ...draftSekolah, titimangsaTempat: e.target.value })}
+                    className="w-full bg-slate-50 border border-slate-300 rounded-lg px-2.5 py-2 text-slate-900"
+                  />
+                  <input
+                    type="text"
+                    value={draftSekolah.titimangsaTanggal}
+                    onChange={(e) => setDraftSekolah({ ...draftSekolah, titimangsaTanggal: e.target.value })}
+                    className="w-full bg-slate-50 border border-slate-300 rounded-lg px-2.5 py-2 text-slate-900"
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Bagian B: Daftar Wali Kelas 1 s.d. 6 */}
+          <div className="bg-white rounded-2xl p-6 shadow-xs border border-slate-200 space-y-4">
+            <div className="pb-3 border-b border-slate-100">
+              <h3 className="text-base font-black text-slate-900 flex items-center gap-2">
+                <UserCheck className="w-5 h-5 text-indigo-600" />
+                Daftar Wali Kelas per Tingkat (Kelas 1 s.d. Kelas 6)
+              </h3>
+              <p className="text-xs text-slate-500 mt-0.5">
+                Menjadi acuan hak akses login Wali Kelas sesuai tingkatnya dan otomatis tampil sebagai penanda tangan <strong>Wali Kelas</strong> pada lembar cetak rapor siswa di kelas terkait.
+              </p>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5 text-xs">
+              {TINGKAT_KELAS_SD.map((t) => {
+                const entry = draftSekolah.waliKelasPerTingkat?.[t.kode] || {
+                  nama: t.kode === 'V' ? draftSekolah.namaWaliKelas : '',
+                  nip: t.kode === 'V' ? draftSekolah.nipWaliKelas : '-',
+                };
+                return (
+                  <div
+                    key={t.kode}
+                    className="p-3.5 rounded-xl border border-slate-200 bg-slate-50/70 space-y-2.5"
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="font-black text-slate-900 text-xs">
+                        Wali Kelas {t.angka} ({t.label})
+                      </span>
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-700 border border-indigo-200">
+                        {t.fase}
+                      </span>
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                      <div className="sm:col-span-2">
+                        <label className="block text-[11px] font-semibold text-slate-600 mb-0.5">
+                          Nama & Gelar Wali Kelas:
+                        </label>
+                        <input
+                          type="text"
+                          value={entry.nama}
+                          onChange={(e) => handleUpdateDraftWaliKelas(t.kode, 'nama', e.target.value)}
+                          placeholder={`Nama Wali Kelas ${t.angka}...`}
+                          className="w-full bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 font-semibold text-slate-900"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[11px] font-semibold text-slate-600 mb-0.5">
+                          NIP / NUPTK:
+                        </label>
+                        <input
+                          type="text"
+                          value={entry.nip}
+                          onChange={(e) => handleUpdateDraftWaliKelas(t.kode, 'nip', e.target.value)}
+                          placeholder="-"
+                          className="w-full bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 text-slate-900"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Bagian C: Daftar Guru Mata Pelajaran */}
+          <div className="bg-white rounded-2xl p-6 shadow-xs border border-slate-200 space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-100">
+              <div>
+                <h3 className="text-base font-black text-slate-900 flex items-center gap-2">
+                  <BookOpen className="w-5 h-5 text-amber-600" />
+                  Daftar Guru Mata Pelajaran (Guru Mapel)
+                </h3>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Guru Mapel memiliki akses ke seluruh kelas (Kelas 1–6) khusus untuk mata pelajaran yang diampunya saja.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={handleAddDraftGuruMapel}
+                className="px-3.5 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-2xs transition self-start sm:self-auto"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                Tambah Guru Mapel
+              </button>
+            </div>
+
+            <div className="space-y-3 text-xs">
+              {(draftSekolah.guruMapelList || []).map((gm, idx) => (
+                <div
+                  key={gm.id}
+                  className="p-3.5 rounded-xl border border-slate-200 bg-slate-50/70 grid grid-cols-1 md:grid-cols-12 gap-3 items-end"
+                >
+                  <div className="md:col-span-4">
+                    <label className="block text-[11px] font-semibold text-slate-600 mb-1">
+                      {idx + 1}. Mata Pelajaran yang Diampu:
+                    </label>
+                    <select
+                      value={gm.kodeMapel}
+                      onChange={(e) => handleUpdateDraftGuruMapel(gm.id, 'kodeMapel', e.target.value)}
+                      className="w-full bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 font-bold text-slate-900"
+                    >
+                      {kurikulum.map((m) => (
+                        <option key={m.kodeMapel} value={m.kodeMapel}>
+                          {m.kodeMapel} - {m.namaMapel}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="md:col-span-4">
+                    <label className="block text-[11px] font-semibold text-slate-600 mb-1">
+                      Nama & Gelar Guru Mapel:
+                    </label>
+                    <input
+                      type="text"
+                      value={gm.nama}
+                      onChange={(e) => handleUpdateDraftGuruMapel(gm.id, 'nama', e.target.value)}
+                      placeholder="Contoh: Budi Hartono, S.Th"
+                      className="w-full bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 font-semibold text-slate-900"
+                    />
+                  </div>
+
+                  <div className="md:col-span-3">
+                    <label className="block text-[11px] font-semibold text-slate-600 mb-1">
+                      NIP / NUPTK:
+                    </label>
+                    <input
+                      type="text"
+                      value={gm.nip}
+                      onChange={(e) => handleUpdateDraftGuruMapel(gm.id, 'nip', e.target.value)}
+                      placeholder="-"
+                      className="w-full bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 text-slate-900"
+                    />
+                  </div>
+
+                  <div className="md:col-span-1 flex justify-end">
+                    <button
+                      type="button"
+                      onClick={() => handleDeleteDraftGuruMapel(gm.id)}
+                      className="p-2 bg-rose-50 hover:bg-rose-100 text-rose-600 rounded-lg transition"
+                      title="Hapus Baris Guru Mapel"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+              ))}
+
+              {(!draftSekolah.guruMapelList || draftSekolah.guruMapelList.length === 0) && (
+                <div className="p-6 text-center border-2 border-dashed border-slate-200 rounded-xl text-slate-400">
+                  Belum ada daftar Guru Mata Pelajaran. Klik &quot;Tambah Guru Mapel&quot; untuk menambahkan.
+                </div>
+              )}
+            </div>
+
+            <div className="pt-4 border-t border-slate-200 flex items-center justify-end gap-3">
+              <button
+                type="submit"
+                className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold flex items-center gap-2 shadow-md shadow-indigo-600/20 transition"
+              >
+                <Save className="w-4 h-4" />
+                Simpan Pengaturan Sekolah &amp; Penugasan Guru
+              </button>
+            </div>
+          </div>
+        </form>
+      )}
+
+      {/* ===================================================================== */}
       {/* TAMPILAN 0: IKHTISAR LENGKAP & ROSTER SISWA (DEFAULT)                 */}
       {/* ===================================================================== */}
       {dashboardView === 'overview' && (
@@ -563,7 +971,9 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
                 <div className="text-3xl font-black text-slate-900">{totalSiswa}</div>
                 <p className="text-xs text-slate-500 mt-1 flex items-center gap-1">
                   <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
-                  Kelas {activeSiswa.kelas} (Fase C)
+                  {distinctClassesCount > 1 && !isWaliKelas
+                    ? `Kelas I–VI (${activeKelasKode}: ${activeFaseLabel})`
+                    : `Kelas ${activeKelasKode} (${activeFaseLabel})`}
                 </p>
               </div>
             </div>
@@ -599,7 +1009,7 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
               <div className="mt-4">
                 <div className="text-3xl font-black text-emerald-900">{generalProgress}%</div>
                 <p className="text-xs text-emerald-700 font-medium mt-1">
-                  {completedMapelCount} dari 10 Mapel Lengkap
+                  {completedMapelCount} dari {kurikulum.length || 10} Mapel Lengkap
                 </p>
               </div>
             </div>
@@ -615,7 +1025,11 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
                 </div>
               </div>
               <div className="mt-4">
-                <div className="text-2xl font-black text-amber-950">Naik Kelas VI</div>
+                <div className="text-2xl font-black text-amber-950">
+                  {targetKenaikanLabel === 'Lulus SD'
+                    ? 'Kelulusan SD'
+                    : `Naik ${targetKenaikanLabel.replace(/\s*\(.*\)/, '')}`}
+                </div>
                 <p className="text-xs text-amber-700 font-medium mt-1">
                   {semester === 2 ? 'Aktif di Semester 2' : 'Dinonaktifkan di Semester 1'}
                 </p>
@@ -627,61 +1041,79 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             {/* Siswa Terpilih Card */}
             <div className="bg-white rounded-2xl p-6 shadow-xs border border-slate-200 flex flex-col justify-between">
-              <div>
-                <div className="flex items-center justify-between pb-3 border-b border-slate-100">
-                  <span className="text-xs font-bold uppercase tracking-wider text-slate-400">
-                    Peserta Didik Aktif
-                  </span>
-                  <span className="text-[11px] font-semibold bg-indigo-50 text-indigo-700 px-2.5 py-0.5 rounded-full">
-                    NISN: {activeSiswa.nisn}
-                  </span>
-                </div>
-
-                <div className="mt-4 flex items-center gap-3.5">
-                  <div className="w-14 h-14 rounded-2xl bg-gradient-to-tr from-indigo-600 to-sky-500 text-white font-extrabold text-xl flex items-center justify-center shadow-md shadow-indigo-600/20">
-                    {activeSiswa.nama.charAt(0)}
-                  </div>
+              {activeSiswa ? (
+                <>
                   <div>
-                    <h3 className="font-extrabold text-slate-900 text-base leading-tight">
-                      {activeSiswa.nama}
-                    </h3>
-                    <p className="text-xs text-slate-500 mt-0.5">
-                      NIS: {activeSiswa.nis} • Kelas {activeSiswa.kelas} • {activeSiswa.agama}
-                    </p>
-                  </div>
-                </div>
+                    <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+                      <span className="text-xs font-bold uppercase tracking-wider text-slate-400">
+                        Peserta Didik Aktif
+                      </span>
+                      <span className="text-[11px] font-semibold bg-indigo-50 text-indigo-700 px-2.5 py-0.5 rounded-full">
+                        NISN: {activeSiswa.nisn}
+                      </span>
+                    </div>
 
-                <div className="mt-5 space-y-2 text-xs text-slate-700 bg-slate-50 p-3.5 rounded-xl border border-slate-100">
-                  <div className="flex justify-between">
-                    <span className="text-slate-500">Tempat, Tgl Lahir:</span>
-                    <span className="font-semibold text-slate-900">{activeSiswa.tempatLahir}, {activeSiswa.tanggalLahir}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-slate-500">Nama Orang Tua:</span>
-                    <span className="font-semibold text-slate-900">{activeSiswa.namaAyah} / {activeSiswa.namaIbu}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-slate-500">Alamat:</span>
-                    <span className="font-semibold text-slate-900 text-right truncate max-w-[180px]">{activeSiswa.alamat}</span>
-                  </div>
-                </div>
-              </div>
+                    <div className="mt-4 flex items-center gap-3.5">
+                      <div className="w-14 h-14 rounded-2xl bg-gradient-to-tr from-indigo-600 to-sky-500 text-white font-extrabold text-xl flex items-center justify-center shadow-md shadow-indigo-600/20">
+                        {activeSiswa.nama.charAt(0)}
+                      </div>
+                      <div>
+                        <h3 className="font-extrabold text-slate-900 text-base leading-tight">
+                          {activeSiswa.nama}
+                        </h3>
+                        <p className="text-xs text-slate-500 mt-0.5">
+                          NIS: {activeSiswa.nis} • Kelas {activeSiswa.kelas} ({getFaseFromKelas(activeSiswa.kelas)}) • {activeSiswa.agama}
+                        </p>
+                      </div>
+                    </div>
 
-              <div className="mt-6 pt-4 border-t border-slate-100 flex items-center gap-2">
-                <button
-                  onClick={() => onSelectTab('preview')}
-                  className="flex-1 py-2 px-3 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-xl flex items-center justify-center gap-1.5 transition"
-                >
-                  <Printer className="w-3.5 h-3.5" />
-                  Cetak Rapor Siswa Ini
-                </button>
-                <button
-                  onClick={() => onSelectTab('nilai')}
-                  className="py-2 px-3 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl transition"
-                >
-                  Edit Nilai
-                </button>
-              </div>
+                    <div className="mt-5 space-y-2 text-xs text-slate-700 bg-slate-50 p-3.5 rounded-xl border border-slate-100">
+                      <div className="flex justify-between">
+                        <span className="text-slate-500">Tempat, Tgl Lahir:</span>
+                        <span className="font-semibold text-slate-900">{activeSiswa.tempatLahir}, {activeSiswa.tanggalLahir}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-slate-500">Nama Orang Tua:</span>
+                        <span className="font-semibold text-slate-900">{activeSiswa.namaAyah} / {activeSiswa.namaIbu}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-slate-500">Alamat:</span>
+                        <span className="font-semibold text-slate-900 text-right truncate max-w-[180px]">{activeSiswa.alamat}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="mt-6 pt-4 border-t border-slate-100 flex items-center gap-2">
+                    <button
+                      onClick={() => onSelectTab('preview')}
+                      className="flex-1 py-2 px-3 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-xl flex items-center justify-center gap-1.5 transition"
+                    >
+                      <Printer className="w-3.5 h-3.5" />
+                      Cetak Rapor Siswa Ini
+                    </button>
+                    <button
+                      onClick={() => onSelectTab('nilai')}
+                      className="py-2 px-3 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl transition"
+                    >
+                      Edit Nilai
+                    </button>
+                  </div>
+                </>
+              ) : (
+                <div className="flex flex-col items-center justify-center text-center py-10 space-y-3">
+                  <Users className="w-10 h-10 text-slate-300" />
+                  <p className="text-xs font-bold text-slate-600">
+                    Belum ada peserta didik terdaftar pada Kelas {activeKelasKode}.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => onSelectTab('siswa')}
+                    className="px-3.5 py-2 bg-indigo-600 text-white rounded-xl text-xs font-bold"
+                  >
+                    Tambah Data Siswa
+                  </button>
+                </div>
+              )}
             </div>
 
             {/* 8 Dimensi Profil Lulusan Tracker */}
@@ -743,7 +1175,9 @@ export const DashboardOverview: React.FC<DashboardOverviewProps> = ({
               <div>
                 <h3 className="font-bold text-slate-900 text-base flex items-center gap-2">
                   <Users className="w-4 h-4 text-indigo-600" />
-                  Daftar Peserta Didik Kelas {activeSiswa.kelas} ({siswaList.length} Siswa)
+                  {distinctClassesCount > 1 && !isWaliKelas
+                    ? `Daftar Peserta Didik Kelas I–VI (${siswaList.length} Siswa)`
+                    : `Daftar Peserta Didik Kelas ${activeKelasKode} (${siswaList.length} Siswa)`}
                 </h3>
                 <p className="text-xs text-slate-500 mt-0.5">
                   Pilih siswa untuk melihat langsung pratinjau Rapor Inti atau Sampul Cetak A4.

@@ -1,8 +1,12 @@
 import {
+  FaseKurikulum,
   ItemKokurikuler8Dimensi,
+  MasterKurikulumMapel,
   PredikatEkstra,
   PredikatKokurikuler,
+  ProfilSekolah,
   RaporMapelKalkulasi,
+  TingkatKelasSD,
 } from '../types/rapor';
 
 export interface SubDimensiProfil {
@@ -525,5 +529,96 @@ export function sintesisNarasiKokurikuler(
   }
 
   return result;
+}
+
+export const TINGKAT_KELAS_SD: {
+  kode: TingkatKelasSD;
+  angka: string;
+  label: string;
+  fase: FaseKurikulum;
+  targetKenaikan: string;
+}[] = [
+  { kode: 'I', angka: '1', label: 'Kelas I (1)', fase: 'Fase A', targetKenaikan: 'Kelas II (Dua)' },
+  { kode: 'II', angka: '2', label: 'Kelas II (2)', fase: 'Fase A', targetKenaikan: 'Kelas III (Tiga)' },
+  { kode: 'III', angka: '3', label: 'Kelas III (3)', fase: 'Fase B', targetKenaikan: 'Kelas IV (Empat)' },
+  { kode: 'IV', angka: '4', label: 'Kelas IV (4)', fase: 'Fase B', targetKenaikan: 'Kelas V (Lima)' },
+  { kode: 'V', angka: '5', label: 'Kelas V (5)', fase: 'Fase C', targetKenaikan: 'Kelas VI (Enam)' },
+  { kode: 'VI', angka: '6', label: 'Kelas VI (6)', fase: 'Fase C', targetKenaikan: 'Lulus SD' },
+];
+
+export function normalizeKelasCode(kelas?: string): TingkatKelasSD {
+  const raw = (kelas || '').trim().toUpperCase().replace(/^KELAS\s+/i, '');
+  if (raw === '1' || raw === 'I' || raw.startsWith('1 ')) return 'I';
+  if (raw === '2' || raw === 'II' || raw.startsWith('2 ')) return 'II';
+  if (raw === '3' || raw === 'III' || raw.startsWith('3 ')) return 'III';
+  if (raw === '4' || raw === 'IV' || raw.startsWith('4 ')) return 'IV';
+  if (raw === '6' || raw === 'VI' || raw.startsWith('6 ')) return 'VI';
+  return 'V';
+}
+
+export function getKelasAngka(kelas?: string): string {
+  const kode = normalizeKelasCode(kelas);
+  return TINGKAT_KELAS_SD.find((t) => t.kode === kode)?.angka || '5';
+}
+
+export function getFaseFromKelas(kelas?: string): FaseKurikulum {
+  const kode = normalizeKelasCode(kelas);
+  if (kode === 'I' || kode === 'II') return 'Fase A';
+  if (kode === 'III' || kode === 'IV') return 'Fase B';
+  return 'Fase C';
+}
+
+export function getFaseDisplayForKelas(kelas?: string): string {
+  const kode = normalizeKelasCode(kelas);
+  const fase = getFaseFromKelas(kode);
+  return `${fase} (Kelas ${kode})`;
+}
+
+export function getTargetKelasLanjutan(kelas?: string): string {
+  const kode = normalizeKelasCode(kelas);
+  return TINGKAT_KELAS_SD.find((t) => t.kode === kode)?.targetKenaikan || 'Kelas VI (Enam)';
+}
+
+export function getCpForFase(mapel: MasterKurikulumMapel, fase: FaseKurikulum): string {
+  if (fase === 'Fase A') return mapel.cpFaseA || mapel.cp;
+  if (fase === 'Fase B') return mapel.cpFaseB || mapel.cp;
+  return mapel.cpFaseC || mapel.cp;
+}
+
+export function getAtpForFase(mapel: MasterKurikulumMapel, fase: FaseKurikulum): string {
+  if (fase === 'Fase A') return mapel.atpFaseA || mapel.atp;
+  if (fase === 'Fase B') return mapel.atpFaseB || mapel.atp;
+  return mapel.atpFaseC || mapel.atp;
+}
+
+export function getTpNarasiForFase(mapel: MasterKurikulumMapel, fase: FaseKurikulum): string[] {
+  if (fase === 'Fase A' && mapel.tpNarasiFaseA && mapel.tpNarasiFaseA.length > 0) {
+    return mapel.tpNarasiFaseA;
+  }
+  if (fase === 'Fase B' && mapel.tpNarasiFaseB && mapel.tpNarasiFaseB.length > 0) {
+    return mapel.tpNarasiFaseB;
+  }
+  if (fase === 'Fase C' && mapel.tpNarasiFaseC && mapel.tpNarasiFaseC.length > 0) {
+    return mapel.tpNarasiFaseC;
+  }
+  return mapel.tpNarasi;
+}
+
+export function getWaliKelasForSiswa(
+  sekolah: ProfilSekolah,
+  kelas?: string
+): { nama: string; nip: string } {
+  const kode = normalizeKelasCode(kelas);
+  const mapped = sekolah.waliKelasPerTingkat?.[kode];
+  if (mapped && mapped.nama && mapped.nama.trim()) {
+    return {
+      nama: mapped.nama,
+      nip: mapped.nip && mapped.nip.trim() ? mapped.nip : '-',
+    };
+  }
+  return {
+    nama: sekolah.namaWaliKelas || '-',
+    nip: sekolah.nipWaliKelas || '-',
+  };
 }
 
