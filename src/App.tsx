@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   AbsensiSiswa,
   DataSiswa,
@@ -53,7 +53,17 @@ import { RoleLoginModal } from './components/RoleLoginModal';
 import { LoginPage } from './components/LoginPage';
 import { AdminUserManager } from './components/AdminUserManager';
 import { Sidebar, TabType } from './components/Sidebar';
-import { GasSyncPayload, getStoredGasUrl, saveToGoogleSheets } from './utils/gasSyncService';
+import {
+  AppDataSnapshot,
+  GasSyncPayload,
+  StatusKenaikanMap,
+  getStoredGasUrl,
+  isPlaceholderGasUrl,
+  loadFromGoogleSheets,
+  loadLocalSnapshot,
+  saveLocalSnapshot,
+  saveToGoogleSheets,
+} from './utils/gasSyncService';
 import {
   AlertCircle,
   BookOpen,
@@ -71,21 +81,70 @@ import {
   Users,
 } from 'lucide-react';
 
+function mergeKurikulumWithDefaults(incoming: MasterKurikulumMapel[]): MasterKurikulumMapel[] {
+  return incoming.map((item) => {
+    const base = INITIAL_KURIKULUM.find((k) => k.kodeMapel === item.kodeMapel);
+    if (!base) return item;
+    return {
+      ...base,
+      ...item,
+      cpFaseA: item.cpFaseA || base.cpFaseA,
+      cpFaseB: item.cpFaseB || base.cpFaseB,
+      cpFaseC: item.cpFaseC || base.cpFaseC,
+      atpFaseA: item.atpFaseA || base.atpFaseA,
+      atpFaseB: item.atpFaseB || base.atpFaseB,
+      atpFaseC: item.atpFaseC || base.atpFaseC,
+      tpNarasiFaseA: item.tpNarasiFaseA?.length ? item.tpNarasiFaseA : base.tpNarasiFaseA,
+      tpNarasiFaseB: item.tpNarasiFaseB?.length ? item.tpNarasiFaseB : base.tpNarasiFaseB,
+      tpNarasiFaseC: item.tpNarasiFaseC?.length ? item.tpNarasiFaseC : base.tpNarasiFaseC,
+      elemenCapaian: item.elemenCapaian?.length ? item.elemenCapaian : base.elemenCapaian,
+    };
+  });
+}
+
 export default function App() {
-  // 1. Core State
-  const [sekolah, setSekolah] = useState<ProfilSekolah>(INITIAL_PROFIL_SEKOLAH);
-  const [siswaList, setSiswaList] = useState<DataSiswa[]>(INITIAL_SISWA);
-  const [selectedNis, setSelectedNis] = useState<string>(INITIAL_SISWA[0].nis);
-  const [semester, setSemester] = useState<1 | 2>(2); // Default Semester 2 (Genap)
-  const [kurikulum, setKurikulum] = useState<MasterKurikulumMapel[]>(INITIAL_KURIKULUM);
-  const [nilaiFormatif, setNilaiFormatif] = useState<NilaiFormatifSiswa[]>(getInitialNilaiFormatif);
-  const [nilaiSumatif, setNilaiSumatif] = useState<NilaiSumatifSiswa[]>(getInitialNilaiSumatif);
-  const [kokurikulerList, setKokurikulerList] = useState<KokurikulerSiswa[]>(getInitialKokurikuler);
-  const [ekstrakurikulerList, setEkstrakurikulerList] = useState<EkstrakurikulerSiswa[]>(getInitialEkstrakurikuler);
-  const [absensiList, setAbsensiList] = useState<AbsensiSiswa[]>(INITIAL_ABSENSI);
+  const initialSnapshot = useMemo(() => loadLocalSnapshot(), []);
+
+  // 1. Core State (terhidrasi dari cache lokal + diperbarui otomatis oleh Google Sheets)
+  const [sekolah, setSekolah] = useState<ProfilSekolah>(
+    () => initialSnapshot?.sekolah || INITIAL_PROFIL_SEKOLAH
+  );
+  const [siswaList, setSiswaList] = useState<DataSiswa[]>(
+    () => (initialSnapshot?.siswaList?.length ? initialSnapshot.siswaList : INITIAL_SISWA)
+  );
+  const [selectedNis, setSelectedNis] = useState<string>(
+    () => initialSnapshot?.siswaList?.[0]?.nis || INITIAL_SISWA[0].nis
+  );
+  const [semester, setSemester] = useState<1 | 2>(() => initialSnapshot?.semester || 2);
+  const [kurikulum, setKurikulum] = useState<MasterKurikulumMapel[]>(() =>
+    initialSnapshot?.kurikulum?.length
+      ? mergeKurikulumWithDefaults(initialSnapshot.kurikulum)
+      : INITIAL_KURIKULUM
+  );
+  const [nilaiFormatif, setNilaiFormatif] = useState<NilaiFormatifSiswa[]>(() =>
+    initialSnapshot?.nilaiFormatif?.length ? initialSnapshot.nilaiFormatif : getInitialNilaiFormatif()
+  );
+  const [nilaiSumatif, setNilaiSumatif] = useState<NilaiSumatifSiswa[]>(() =>
+    initialSnapshot?.nilaiSumatif?.length ? initialSnapshot.nilaiSumatif : getInitialNilaiSumatif()
+  );
+  const [kokurikulerList, setKokurikulerList] = useState<KokurikulerSiswa[]>(() =>
+    initialSnapshot?.kokurikulerList?.length
+      ? initialSnapshot.kokurikulerList
+      : getInitialKokurikuler()
+  );
+  const [ekstrakurikulerList, setEkstrakurikulerList] = useState<EkstrakurikulerSiswa[]>(() =>
+    initialSnapshot?.ekstrakurikulerList?.length
+      ? initialSnapshot.ekstrakurikulerList
+      : getInitialEkstrakurikuler()
+  );
+  const [absensiList, setAbsensiList] = useState<AbsensiSiswa[]>(() =>
+    initialSnapshot?.absensiList?.length ? initialSnapshot.absensiList : INITIAL_ABSENSI
+  );
 
   // User Accounts State (Managed by Admin)
-  const [userAccounts, setUserAccounts] = useState<UserAccount[]>(INITIAL_USERS);
+  const [userAccounts, setUserAccounts] = useState<UserAccount[]>(() =>
+    initialSnapshot?.userAccounts?.length ? initialSnapshot.userAccounts : INITIAL_USERS
+  );
 
   // Authentication & Gate State
   const [userSession, setUserSession] = useState<UserSession>({
@@ -97,23 +156,27 @@ export default function App() {
   });
 
   // Hybrid Catatan Wali Kelas State per student NIS
-  const [customNotes, setCustomNotes] = useState<Record<string, string>>({
-    '230101': '', // ADRY GRACIO SURYAJAYA -> Auto-generate Top 10%
-    '230102': 'Ananda Clara memiliki kepemimpinan yang baik dan selalu tekun dalam tugas kelompok.',
-    '230105': '', // Michael -> Auto-generate Bottom 30%
-  });
+  const [customNotes, setCustomNotes] = useState<Record<string, string>>(
+    () =>
+      initialSnapshot?.customNotes || {
+        '230101': '', // ADRY GRACIO SURYAJAYA -> Auto-generate Top 10%
+        '230102': 'Ananda Clara memiliki kepemimpinan yang baik dan selalu tekun dalam tugas kelompok.',
+        '230105': '', // Michael -> Auto-generate Bottom 30%
+      }
+  );
 
   // Status Kenaikan State per student NIS (Semester 2)
-  const [statusKenaikanMap, setStatusKenaikanMap] = useState<
-    Record<string, { status: 'Naik Kelas' | 'Tinggal Kelas' | 'Lulus' | 'Belum Ditentukan'; targetKelas: string }>
-  >({
-    '230101': { status: 'Naik Kelas', targetKelas: 'Kelas VI (Enam)' },
-    '230102': { status: 'Naik Kelas', targetKelas: 'Kelas VI (Enam)' },
-    '230103': { status: 'Naik Kelas', targetKelas: 'Kelas VI (Enam)' },
-    '230104': { status: 'Naik Kelas', targetKelas: 'Kelas VI (Enam)' },
-    '230105': { status: 'Naik Kelas', targetKelas: 'Kelas VI (Enam)' },
-    '230106': { status: 'Naik Kelas', targetKelas: 'Kelas VI (Enam)' },
-  });
+  const [statusKenaikanMap, setStatusKenaikanMap] = useState<StatusKenaikanMap>(
+    () =>
+      initialSnapshot?.statusKenaikanMap || {
+        '230101': { status: 'Naik Kelas', targetKelas: 'Kelas VI (Enam)' },
+        '230102': { status: 'Naik Kelas', targetKelas: 'Kelas VI (Enam)' },
+        '230103': { status: 'Naik Kelas', targetKelas: 'Kelas VI (Enam)' },
+        '230104': { status: 'Naik Kelas', targetKelas: 'Kelas VI (Enam)' },
+        '230105': { status: 'Naik Kelas', targetKelas: 'Kelas VI (Enam)' },
+        '230106': { status: 'Naik Kelas', targetKelas: 'Kelas VI (Enam)' },
+      }
+  );
 
   // Navigation State
   const [activeTab, setActiveTab] = useState<TabType>('dashboard');
@@ -128,59 +191,310 @@ export default function App() {
 
   // Google Apps Script Sync State
   const [isSavingToSheets, setIsSavingToSheets] = useState<boolean>(false);
+  const [isLoadingFromSheets, setIsLoadingFromSheets] = useState<boolean>(false);
   const [syncNotification, setSyncNotification] = useState<{
     type: 'loading' | 'success' | 'error';
     message: string;
     timestamp?: string;
   } | null>(null);
+  const [loginSyncStatus, setLoginSyncStatus] = useState<{
+    type: 'loading' | 'success' | 'info' | 'error';
+    message: string;
+  } | null>(null);
 
-  const handleSaveToGoogleSheets = async () => {
-    const url = getStoredGasUrl();
-    if (!url) {
-      setIsGasModalOpen(true);
-      setSyncNotification({
-        type: 'error',
-        message: 'Silakan masukkan URL Web App Google Apps Script Anda terlebih dahulu untuk memulai sinkronisasi.',
-      });
-      return;
-    }
+  // Latest Snapshot Ref (menghindari stale closure saat auto-sync langsung setelah setState)
+  const latestDataRef = useRef<AppDataSnapshot>({
+    sekolah,
+    userAccounts,
+    siswaList,
+    semester,
+    kurikulum,
+    nilaiFormatif,
+    nilaiSumatif,
+    kokurikulerList,
+    ekstrakurikulerList,
+    absensiList,
+    customNotes,
+    statusKenaikanMap,
+  });
 
-    setIsSavingToSheets(true);
-    setSyncNotification({
-      type: 'loading',
-      message: 'Menyimpan data siswa dan nilai terbaru ke Google Sheets...',
-    });
-
-    const payload: GasSyncPayload = {
-      action: 'saveAll',
-      semester,
+  useEffect(() => {
+    const currentSnapshot: AppDataSnapshot = {
+      sekolah,
+      userAccounts,
       siswaList,
+      semester,
       kurikulum,
       nilaiFormatif,
       nilaiSumatif,
       kokurikulerList,
       ekstrakurikulerList,
       absensiList,
+      customNotes,
+      statusKenaikanMap,
     };
+    latestDataRef.current = currentSnapshot;
+    saveLocalSnapshot(currentSnapshot);
+  }, [
+    sekolah,
+    userAccounts,
+    siswaList,
+    semester,
+    kurikulum,
+    nilaiFormatif,
+    nilaiSumatif,
+    kokurikulerList,
+    ekstrakurikulerList,
+    absensiList,
+    customNotes,
+    statusKenaikanMap,
+  ]);
 
-    const result = await saveToGoogleSheets(url, payload);
-    setIsSavingToSheets(false);
+  const debouncedSyncTimerRef = useRef<number | null>(null);
 
-    if (result.success) {
+  // Auto-Load (GET) dari Google Sheets
+  const pullSyncFromServer = useCallback(async (reason: 'mount' | 'login' | 'manual' = 'manual') => {
+    const url = getStoredGasUrl();
+    setIsLoadingFromSheets(true);
+    setLoginSyncStatus({
+      type: 'loading',
+      message: 'Menyinkronkan data dari server...',
+    });
+
+    if (reason !== 'mount') {
       setSyncNotification({
-        type: 'success',
-        message: result.message || 'Data berhasil disimpan dan disinkronkan ke Google Sheets!',
-        timestamp: new Date().toLocaleTimeString('id-ID'),
+        type: 'loading',
+        message: 'Menyinkronkan data dari server...',
       });
-      setTimeout(() => {
-        setSyncNotification((prev) => (prev?.type === 'success' ? null : prev));
-      }, 6000);
     } else {
       setSyncNotification({
-        type: 'error',
-        message: result.message || 'Gagal menyimpan ke Google Sheets.',
+        type: 'loading',
+        message: 'Menyinkronkan data dari server...',
       });
     }
+
+    const result = await loadFromGoogleSheets(url);
+    setIsLoadingFromSheets(false);
+
+    if (result.success && result.data) {
+      const incoming = result.data;
+      const mergedSnapshot: AppDataSnapshot = { ...latestDataRef.current };
+
+      if (incoming.sekolah) {
+        setSekolah(incoming.sekolah);
+        mergedSnapshot.sekolah = incoming.sekolah;
+      }
+      if (incoming.userAccounts && incoming.userAccounts.length > 0) {
+        setUserAccounts(incoming.userAccounts);
+        mergedSnapshot.userAccounts = incoming.userAccounts;
+      }
+      if (incoming.siswaList && incoming.siswaList.length > 0) {
+        setSiswaList(incoming.siswaList);
+        mergedSnapshot.siswaList = incoming.siswaList;
+      }
+      if (incoming.kurikulum && incoming.kurikulum.length > 0) {
+        const mergedKuri = mergeKurikulumWithDefaults(incoming.kurikulum);
+        setKurikulum(mergedKuri);
+        mergedSnapshot.kurikulum = mergedKuri;
+      }
+      if (incoming.nilaiFormatif) {
+        setNilaiFormatif(incoming.nilaiFormatif);
+        mergedSnapshot.nilaiFormatif = incoming.nilaiFormatif;
+      }
+      if (incoming.nilaiSumatif) {
+        setNilaiSumatif(incoming.nilaiSumatif);
+        mergedSnapshot.nilaiSumatif = incoming.nilaiSumatif;
+      }
+      if (incoming.kokurikulerList && incoming.kokurikulerList.length > 0) {
+        setKokurikulerList(incoming.kokurikulerList);
+        mergedSnapshot.kokurikulerList = incoming.kokurikulerList;
+      }
+      if (incoming.ekstrakurikulerList && incoming.ekstrakurikulerList.length > 0) {
+        setEkstrakurikulerList(incoming.ekstrakurikulerList);
+        mergedSnapshot.ekstrakurikulerList = incoming.ekstrakurikulerList;
+      }
+      if (incoming.absensiList && incoming.absensiList.length > 0) {
+        setAbsensiList(incoming.absensiList);
+        mergedSnapshot.absensiList = incoming.absensiList;
+      }
+      if (incoming.customNotes) {
+        setCustomNotes(incoming.customNotes);
+        mergedSnapshot.customNotes = incoming.customNotes;
+      }
+      if (incoming.statusKenaikanMap) {
+        setStatusKenaikanMap(incoming.statusKenaikanMap);
+        mergedSnapshot.statusKenaikanMap = incoming.statusKenaikanMap;
+      }
+
+      latestDataRef.current = mergedSnapshot;
+      saveLocalSnapshot(mergedSnapshot);
+
+      const timeStr = new Date().toLocaleTimeString('id-ID');
+      setLoginSyncStatus({
+        type: 'success',
+        message: `Data guru, sekolah & nilai tersinkron (${timeStr})`,
+      });
+      setSyncNotification({
+        type: 'success',
+        message: 'Data berhasil disinkronkan dari server Google Sheets!',
+        timestamp: timeStr,
+      });
+      window.setTimeout(() => {
+        setSyncNotification((prev) => (prev?.type === 'success' ? null : prev));
+      }, 4500);
+      return;
+    }
+
+    if (result.isPlaceholder) {
+      setLoginSyncStatus({
+        type: 'info',
+        message:
+          'Memakai data lokal (ganti DEFAULT_GAS_WEBAPP_URL di kode atau atur URL GAS untuk sync lintas perangkat).',
+      });
+      if (reason === 'manual') {
+        setSyncNotification({
+          type: 'error',
+          message: result.message,
+        });
+      } else {
+        setSyncNotification(null);
+      }
+      return;
+    }
+
+    setLoginSyncStatus({
+      type: 'error',
+      message: result.message || 'Gagal mengambil data dari server Google Sheets.',
+    });
+    setSyncNotification({
+      type: 'error',
+      message: result.message || 'Gagal menyinkronkan data dari server.',
+    });
+  }, []);
+
+  // Auto-Load pertama kali aplikasi dimuat
+  useEffect(() => {
+    void pullSyncFromServer('mount');
+  }, [pullSyncFromServer]);
+
+  // Helper Auto-Sync / Manual POST ke Google Sheets dengan snapshot terbaru
+  const pushSyncToServer = useCallback(
+    async (
+      overrides?: Partial<AppDataSnapshot>,
+      action: GasSyncPayload['action'] = 'saveAll',
+      loadingMessage = 'Menyimpan data dan menyinkronkan ke Google Sheets...',
+      silentIfPlaceholder = false
+    ) => {
+      if (debouncedSyncTimerRef.current !== null) {
+        window.clearTimeout(debouncedSyncTimerRef.current);
+        debouncedSyncTimerRef.current = null;
+      }
+
+      const nextData: AppDataSnapshot = {
+        ...latestDataRef.current,
+        ...overrides,
+      };
+      latestDataRef.current = nextData;
+      saveLocalSnapshot(nextData);
+
+      const url = getStoredGasUrl();
+      if (!url) {
+        if (!silentIfPlaceholder) {
+          setIsGasModalOpen(true);
+          setSyncNotification({
+            type: 'error',
+            message:
+              'Silakan masukkan URL Web App Google Apps Script Anda terlebih dahulu untuk memulai sinkronisasi.',
+          });
+        }
+        return;
+      }
+
+      if (silentIfPlaceholder && isPlaceholderGasUrl(url)) {
+        return;
+      }
+
+      setIsSavingToSheets(true);
+      setSyncNotification({
+        type: 'loading',
+        message: loadingMessage,
+      });
+
+      const payload: GasSyncPayload = {
+        action,
+        semester: nextData.semester,
+        sekolah: nextData.sekolah,
+        userAccounts: nextData.userAccounts,
+        siswaList: nextData.siswaList,
+        kurikulum: nextData.kurikulum,
+        nilaiFormatif: nextData.nilaiFormatif,
+        nilaiSumatif: nextData.nilaiSumatif,
+        kokurikulerList: nextData.kokurikulerList,
+        ekstrakurikulerList: nextData.ekstrakurikulerList,
+        absensiList: nextData.absensiList,
+        customNotes: nextData.customNotes,
+        statusKenaikanMap: nextData.statusKenaikanMap,
+      };
+
+      const result = await saveToGoogleSheets(url, payload);
+      setIsSavingToSheets(false);
+
+      if (result.success) {
+        setSyncNotification({
+          type: 'success',
+          message: result.message || 'Data berhasil disimpan dan disinkronkan ke Google Sheets!',
+          timestamp: new Date().toLocaleTimeString('id-ID'),
+        });
+        window.setTimeout(() => {
+          setSyncNotification((prev) => (prev?.type === 'success' ? null : prev));
+        }, 4500);
+      } else {
+        setSyncNotification({
+          type: 'error',
+          message: result.message || 'Gagal menyimpan ke Google Sheets.',
+        });
+      }
+    },
+    []
+  );
+
+  // Debounced Auto-Sync untuk input nilai cepat agar tidak membanjiri endpoint GAS per ketikan
+  const scheduleAutoSync = useCallback(
+    (
+      overrides?: Partial<AppDataSnapshot>,
+      action: GasSyncPayload['action'] = 'saveNilai',
+      loadingMessage = 'Menyinkronkan perubahan nilai ke Google Sheets...'
+    ) => {
+      const nextData: AppDataSnapshot = {
+        ...latestDataRef.current,
+        ...overrides,
+      };
+      latestDataRef.current = nextData;
+      saveLocalSnapshot(nextData);
+
+      if (isPlaceholderGasUrl(getStoredGasUrl())) {
+        return;
+      }
+
+      if (debouncedSyncTimerRef.current !== null) {
+        window.clearTimeout(debouncedSyncTimerRef.current);
+      }
+
+      debouncedSyncTimerRef.current = window.setTimeout(() => {
+        debouncedSyncTimerRef.current = null;
+        void pushSyncToServer(undefined, action, loadingMessage, true);
+      }, 1400);
+    },
+    [pushSyncToServer]
+  );
+
+  const handleSaveToGoogleSheets = async () => {
+    await pushSyncToServer(
+      undefined,
+      'saveAll',
+      'Menyimpan seluruh data (Guru, Sekolah, Siswa & Nilai) ke Google Sheets...',
+      false
+    );
   };
 
   // Scoped Siswa List (Wali Kelas terkunci hanya pada kelas yang diampu)
@@ -362,7 +676,7 @@ export default function App() {
     return legerRows.filter((r) => allowedNis.has(r.nis));
   }, [legerRows, scopedSiswaList]);
 
-  // Handlers for updates
+  // Handlers for updates + Auto-Sync ke Google Sheets
   const handleUpdateFormatif = (
     nis: string,
     kodeMapel: string,
@@ -371,16 +685,20 @@ export default function App() {
   ) => {
     setNilaiFormatif((prev) => {
       const idx = prev.findIndex((item) => item.nis === nis && item.kodeMapel === kodeMapel);
+      let next: NilaiFormatifSiswa[];
       if (idx >= 0) {
         const copy = [...prev];
         const newTp = [...copy[idx].nilaiTp];
         newTp[tpIndex] = value;
         copy[idx] = { ...copy[idx], nilaiTp: newTp };
-        return copy;
+        next = copy;
+      } else {
+        const newTp = new Array(25).fill(0);
+        newTp[tpIndex] = value;
+        next = [...prev, { nis, kodeMapel, nilaiTp: newTp }];
       }
-      const newTp = new Array(25).fill(0);
-      newTp[tpIndex] = value;
-      return [...prev, { nis, kodeMapel, nilaiTp: newTp }];
+      scheduleAutoSync({ nilaiFormatif: next }, 'saveNilai', 'Menyinkronkan nilai formatif ke Google Sheets...');
+      return next;
     });
   };
 
@@ -392,6 +710,7 @@ export default function App() {
   ) => {
     setNilaiSumatif((prev) => {
       const idx = prev.findIndex((item) => item.nis === nis && item.kodeMapel === kodeMapel);
+      let next: NilaiSumatifSiswa[];
       if (idx >= 0) {
         const copy = [...prev];
         const item = { ...copy[idx] };
@@ -406,18 +725,21 @@ export default function App() {
           item.sas = value;
         }
         copy[idx] = item;
-        return copy;
-      }
-      const sumLm = [0, 0, 0, 0];
-      let sts = 0;
-      let sas = 0;
-      if (field.startsWith('lm')) {
-        const lmIdx = parseInt(field.replace('lm', ''), 10) - 1;
-        sumLm[lmIdx] = value;
-      } else if (field === 'sts') sts = value;
-      else if (field === 'sas') sas = value;
+        next = copy;
+      } else {
+        const sumLm = [0, 0, 0, 0];
+        let sts = 0;
+        let sas = 0;
+        if (field.startsWith('lm')) {
+          const lmIdx = parseInt(field.replace('lm', ''), 10) - 1;
+          sumLm[lmIdx] = value;
+        } else if (field === 'sts') sts = value;
+        else if (field === 'sas') sas = value;
 
-      return [...prev, { nis, kodeMapel, sumatifLm: sumLm, sts, sas }];
+        next = [...prev, { nis, kodeMapel, sumatifLm: sumLm, sts, sas }];
+      }
+      scheduleAutoSync({ nilaiSumatif: next }, 'saveNilai', 'Menyinkronkan nilai sumatif ke Google Sheets...');
+      return next;
     });
   };
 
@@ -436,6 +758,7 @@ export default function App() {
           d.kode === kodeDimensi ? { ...d, predikat, catatanPerkembangan: catatan } : d
         );
         copy[idx] = studentKoku;
+        scheduleAutoSync({ kokurikulerList: copy }, 'saveAll', 'Menyinkronkan data kokurikuler ke Google Sheets...');
         return copy;
       }
       return prev;
@@ -448,12 +771,16 @@ export default function App() {
   ) => {
     setKokurikulerList((prev) => {
       const idx = prev.findIndex((k) => k.nis === nis);
+      let next: KokurikulerSiswa[];
       if (idx >= 0) {
         const copy = [...prev];
         copy[idx] = { ...copy[idx], dimensi };
-        return copy;
+        next = copy;
+      } else {
+        next = [...prev, { nis, semester, dimensi }];
       }
-      return [...prev, { nis, semester, dimensi }];
+      scheduleAutoSync({ kokurikulerList: next }, 'saveAll', 'Menyinkronkan data kokurikuler ke Google Sheets...');
+      return next;
     });
   };
 
@@ -478,19 +805,25 @@ export default function App() {
           dimensi: newDimensi,
         };
       });
-      return [...untouched, ...updatedScoped];
+      const next = [...untouched, ...updatedScoped];
+      void pushSyncToServer({ kokurikulerList: next }, 'saveAll', 'Menyimpan template kokurikuler ke Google Sheets...', true);
+      return next;
     });
   };
 
   const handleUpdateEkstrakurikuler = (nis: string, daftarEkstra: ItemEkstrakurikuler[]) => {
     setEkstrakurikulerList((prev) => {
       const idx = prev.findIndex((e) => e.nis === nis);
+      let next: EkstrakurikulerSiswa[];
       if (idx >= 0) {
         const copy = [...prev];
         copy[idx] = { ...copy[idx], daftarEkstra };
-        return copy;
+        next = copy;
+      } else {
+        next = [...prev, { nis, semester, daftarEkstra }];
       }
-      return [...prev, { nis, semester, daftarEkstra }];
+      scheduleAutoSync({ ekstrakurikulerList: next }, 'saveAll', 'Menyinkronkan ekstrakurikuler ke Google Sheets...');
+      return next;
     });
   };
 
@@ -501,17 +834,25 @@ export default function App() {
   ) => {
     setAbsensiList((prev) => {
       const idx = prev.findIndex((a) => a.nis === nis);
+      let next: AbsensiSiswa[];
       if (idx >= 0) {
         const copy = [...prev];
         copy[idx] = { ...copy[idx], [field]: val };
-        return copy;
+        next = copy;
+      } else {
+        next = [...prev, { nis, semester, sakit: 0, izin: 0, tanpaKeterangan: 0, [field]: val }];
       }
-      return [...prev, { nis, semester, sakit: 0, izin: 0, tanpaKeterangan: 0, [field]: val }];
+      scheduleAutoSync({ absensiList: next }, 'saveAll', 'Menyinkronkan absensi ke Google Sheets...');
+      return next;
     });
   };
 
   const handleUpdateCustomCatatan = (nis: string, text: string) => {
-    setCustomNotes((prev) => ({ ...prev, [nis]: text }));
+    setCustomNotes((prev) => {
+      const next = { ...prev, [nis]: text };
+      scheduleAutoSync({ customNotes: next }, 'saveAll', 'Menyinkronkan catatan wali kelas ke Google Sheets...');
+      return next;
+    });
   };
 
   const handleUpdateStatusKenaikan = (
@@ -520,31 +861,43 @@ export default function App() {
     targetKelas?: string
   ) => {
     const siswa = siswaList.find((s) => s.nis === nis);
-    setStatusKenaikanMap((prev) => ({
-      ...prev,
-      [nis]: { status, targetKelas: targetKelas || getTargetKelasLanjutan(siswa?.kelas) },
-    }));
+    setStatusKenaikanMap((prev) => {
+      const next = {
+        ...prev,
+        [nis]: { status, targetKelas: targetKelas || getTargetKelasLanjutan(siswa?.kelas) },
+      };
+      void pushSyncToServer({ statusKenaikanMap: next }, 'saveAll', 'Menyimpan status kenaikan kelas ke Google Sheets...', true);
+      return next;
+    });
   };
 
   const handleUpdateMapelKurikulum = (updatedMapel: MasterKurikulumMapel) => {
-    setKurikulum((prev) =>
-      prev.map((m) => (m.kodeMapel === updatedMapel.kodeMapel ? updatedMapel : m))
+    const nextKurikulum = kurikulum.map((m) =>
+      m.kodeMapel === updatedMapel.kodeMapel ? updatedMapel : m
+    );
+    setKurikulum(nextKurikulum);
+    void pushSyncToServer(
+      { kurikulum: nextKurikulum },
+      'saveKurikulum',
+      'Menyimpan perubahan Master Kurikulum ke Google Sheets...',
+      true
     );
   };
 
   const handleUpdateSiswa = (updatedSiswa: DataSiswa) => {
-    setSiswaList((prev) =>
-      prev.map((s) => (s.nis === updatedSiswa.nis ? updatedSiswa : s))
+    const nextSiswa = siswaList.map((s) => (s.nis === updatedSiswa.nis ? updatedSiswa : s));
+    setSiswaList(nextSiswa);
+    void pushSyncToServer(
+      { siswaList: nextSiswa },
+      'saveSiswa',
+      'Menyimpan perubahan data siswa ke Google Sheets...',
+      true
     );
   };
 
   const handleAddSiswa = (newSiswa: DataSiswa) => {
-    setSiswaList((prev) => [...prev, newSiswa]);
-
-    setAbsensiList((prev) => [
-      ...prev,
-      { nis: newSiswa.nis, semester, sakit: 0, izin: 0, tanpaKeterangan: 0 },
-    ]);
+    const nextSiswa = [...siswaList, newSiswa];
+    const nextAbsensi = [...absensiList, { nis: newSiswa.nis, semester, sakit: 0, izin: 0, tanpaKeterangan: 0 }];
 
     const defaultDimensi: ItemKokurikuler8Dimensi[] = [
       {
@@ -581,15 +934,28 @@ export default function App() {
       },
     ];
 
-    setKokurikulerList((prev) => [
-      ...prev,
-      { nis: newSiswa.nis, semester, dimensi: defaultDimensi },
-    ]);
-
-    setStatusKenaikanMap((prev) => ({
-      ...prev,
+    const nextKoku = [...kokurikulerList, { nis: newSiswa.nis, semester, dimensi: defaultDimensi }];
+    const nextStatus: StatusKenaikanMap = {
+      ...statusKenaikanMap,
       [newSiswa.nis]: { status: 'Naik Kelas', targetKelas: getTargetKelasLanjutan(newSiswa.kelas) },
-    }));
+    };
+
+    setSiswaList(nextSiswa);
+    setAbsensiList(nextAbsensi);
+    setKokurikulerList(nextKoku);
+    setStatusKenaikanMap(nextStatus);
+
+    void pushSyncToServer(
+      {
+        siswaList: nextSiswa,
+        absensiList: nextAbsensi,
+        kokurikulerList: nextKoku,
+        statusKenaikanMap: nextStatus,
+      },
+      'saveSiswa',
+      'Menyimpan data siswa baru ke Google Sheets...',
+      true
+    );
   };
 
   const handleAddBulkSiswa = (siswaArr: DataSiswa[]) => {
@@ -597,8 +963,7 @@ export default function App() {
     const toAdd = siswaArr.filter((s) => !existingNis.has(s.nis));
     if (toAdd.length === 0) return;
 
-    setSiswaList((prev) => [...prev, ...toAdd]);
-
+    const nextSiswa = [...siswaList, ...toAdd];
     const newAbsensi = toAdd.map((s) => ({
       nis: s.nis,
       semester,
@@ -606,7 +971,7 @@ export default function App() {
       izin: 0,
       tanpaKeterangan: 0,
     }));
-    setAbsensiList((prev) => [...prev, ...newAbsensi]);
+    const nextAbsensi = [...absensiList, ...newAbsensi];
 
     const defaultDimensi: ItemKokurikuler8Dimensi[] = [
       {
@@ -648,27 +1013,54 @@ export default function App() {
       semester,
       dimensi: defaultDimensi,
     }));
-    setKokurikulerList((prev) => [...prev, ...newKoku]);
+    const nextKoku = [...kokurikulerList, ...newKoku];
 
-    const newStatus: Record<string, { status: 'Naik Kelas'; targetKelas: string }> = {};
+    const newStatus: StatusKenaikanMap = {};
     toAdd.forEach((s) => {
       newStatus[s.nis] = { status: 'Naik Kelas', targetKelas: getTargetKelasLanjutan(s.kelas) };
     });
-    setStatusKenaikanMap((prev) => ({ ...prev, ...newStatus }));
+    const nextStatus = { ...statusKenaikanMap, ...newStatus };
+
+    setSiswaList(nextSiswa);
+    setAbsensiList(nextAbsensi);
+    setKokurikulerList(nextKoku);
+    setStatusKenaikanMap(nextStatus);
+
+    void pushSyncToServer(
+      {
+        siswaList: nextSiswa,
+        absensiList: nextAbsensi,
+        kokurikulerList: nextKoku,
+        statusKenaikanMap: nextStatus,
+      },
+      'saveSiswa',
+      `Menyimpan ${toAdd.length} siswa baru ke Google Sheets...`,
+      true
+    );
   };
 
   const handleDeleteSiswa = (nis: string) => {
-    setSiswaList((prev) => {
-      const filtered = prev.filter((s) => s.nis !== nis);
-      if (selectedNis === nis && filtered.length > 0) {
-        setSelectedNis(filtered[0].nis);
-      }
-      return filtered;
-    });
+    const filtered = siswaList.filter((s) => s.nis !== nis);
+    setSiswaList(filtered);
+    if (selectedNis === nis && filtered.length > 0) {
+      setSelectedNis(filtered[0].nis);
+    }
+    void pushSyncToServer(
+      { siswaList: filtered },
+      'saveSiswa',
+      'Memperbarui penghapusan siswa ke Google Sheets...',
+      true
+    );
   };
 
   const handleUpdateBulkAbsensi = (newAbsensi: AbsensiSiswa[]) => {
     setAbsensiList(newAbsensi);
+    void pushSyncToServer(
+      { absensiList: newAbsensi },
+      'saveAll',
+      'Menyimpan rekap absensi ke Google Sheets...',
+      true
+    );
   };
 
   const handleNavigateToPrint = (nis: string, subTab: 'cover' | 'inti') => {
@@ -677,26 +1069,45 @@ export default function App() {
     setActiveTab('preview');
   };
 
-  // Admin User Account Management
+  // Admin User Account Management (Otomatis sinkron ke Google Sheets)
   const handleAddUser = (newUser: UserAccount) => {
-    setUserAccounts((prev) => [...prev, newUser]);
+    const nextUsers = [...userAccounts, newUser];
+    setUserAccounts(nextUsers);
+    void pushSyncToServer(
+      { userAccounts: nextUsers },
+      'saveUsers',
+      'Menyimpan akun guru baru & password ke Google Sheets...',
+      true
+    );
   };
 
   const handleUpdateUser = (updatedUser: UserAccount) => {
-    setUserAccounts((prev) =>
-      prev.map((u) => (u.id === updatedUser.id ? updatedUser : u))
+    const nextUsers = userAccounts.map((u) => (u.id === updatedUser.id ? updatedUser : u));
+    setUserAccounts(nextUsers);
+    void pushSyncToServer(
+      { userAccounts: nextUsers },
+      'saveUsers',
+      'Menyimpan pembaruan akun guru & password ke Google Sheets...',
+      true
     );
   };
 
   const handleDeleteUser = (userId: string) => {
-    setUserAccounts((prev) => prev.filter((u) => u.id !== userId));
+    const nextUsers = userAccounts.filter((u) => u.id !== userId);
+    setUserAccounts(nextUsers);
+    void pushSyncToServer(
+      { userAccounts: nextUsers },
+      'saveUsers',
+      'Menyinkronkan penghapusan akun guru ke Google Sheets...',
+      true
+    );
   };
 
   const handleLogout = () => {
     setUserSession((prev) => ({ ...prev, isLoggedIn: false }));
   };
 
-  // Terapkan sesi login / switch role & arahkan halaman sesuai hak akses
+  // Terapkan sesi login / switch role & arahkan halaman sesuai hak akses + tarik data terbaru dari GAS
   const applySessionAndRoute = (newSession: UserSession) => {
     const normalizedSession: UserSession = {
       ...newSession,
@@ -721,10 +1132,13 @@ export default function App() {
     } else {
       setActiveTab('dashboard');
     }
+
+    // Auto-Load ulang dari Google Sheets saat pengguna baru masuk agar data lintas perangkat selalu terbaru
+    void pullSyncFromServer('login');
   };
 
-  // Sinkronkan Profil Sekolah & Master Penugasan Wali Kelas 1-6 / Guru Mapel ke Akun Masuk
-  const handleUpdateSekolahAndSyncUsers = (updatedSekolah: ProfilSekolah) => {
+  // Sinkronkan Profil Sekolah & Master Penugasan Wali Kelas 1-6 / Guru Mapel ke Akun Masuk + Google Sheets
+  const handleUpdateSekolahAndSyncUsers = (updatedSekolah: ProfilSekolah, syncNow = true) => {
     const syncedWaliMap = { ...(updatedSekolah.waliKelasPerTingkat || {}) };
     if (
       updatedSekolah.namaWaliKelas &&
@@ -744,75 +1158,83 @@ export default function App() {
     };
     setSekolah(finalSekolah);
 
-    setUserAccounts((prevUsers) => {
-      const updated = prevUsers.map((u) => {
-        if (u.role === 'wali_kelas') {
-          const kelasKey = normalizeKelasCode(u.kelasAjar || 'V');
-          const mappedWali = finalSekolah.waliKelasPerTingkat?.[kelasKey];
-          if (mappedWali && mappedWali.nama.trim()) {
-            return {
-              ...u,
-              nama: mappedWali.nama.trim(),
-              nip: mappedWali.nip || '-',
-              kelasAjar: kelasKey,
-            };
-          }
-        } else if (u.role === 'guru_mapel' && u.kodeMapel) {
-          const mappedGm = finalSekolah.guruMapelList?.find((gm) => gm.kodeMapel === u.kodeMapel);
-          if (mappedGm && mappedGm.nama.trim()) {
-            return {
-              ...u,
-              nama: mappedGm.nama.trim(),
-              nip: mappedGm.nip || '-',
-              namaMapel: mappedGm.namaMapel || u.namaMapel,
-            };
-          }
+    const prevUsers = latestDataRef.current.userAccounts;
+    const updatedUsers = prevUsers.map((u) => {
+      if (u.role === 'wali_kelas') {
+        const kelasKey = normalizeKelasCode(u.kelasAjar || 'V');
+        const mappedWali = finalSekolah.waliKelasPerTingkat?.[kelasKey];
+        if (mappedWali && mappedWali.nama.trim()) {
+          return {
+            ...u,
+            nama: mappedWali.nama.trim(),
+            nip: mappedWali.nip || '-',
+            kelasAjar: kelasKey,
+          };
         }
-        return u;
-      });
-
-      // Tambahkan akun Wali Kelas baru jika tingkat tsb belum memiliki akun
-      TINGKAT_KELAS_SD.forEach((t) => {
-        const entry = finalSekolah.waliKelasPerTingkat?.[t.kode];
-        if (entry && entry.nama.trim()) {
-          const exists = updated.some(
-            (u) => u.role === 'wali_kelas' && normalizeKelasCode(u.kelasAjar || 'V') === t.kode
-          );
-          if (!exists) {
-            updated.push({
-              id: `user-wali-${t.angka}`,
-              nama: entry.nama.trim(),
-              nip: entry.nip || '-',
-              role: 'wali_kelas',
-              kelasAjar: t.kode,
-              password: 'wali123',
-            });
-          }
+      } else if (u.role === 'guru_mapel' && u.kodeMapel) {
+        const mappedGm = finalSekolah.guruMapelList?.find((gm) => gm.kodeMapel === u.kodeMapel);
+        if (mappedGm && mappedGm.nama.trim()) {
+          return {
+            ...u,
+            nama: mappedGm.nama.trim(),
+            nip: mappedGm.nip || '-',
+            namaMapel: mappedGm.namaMapel || u.namaMapel,
+          };
         }
-      });
-
-      // Tambahkan akun Guru Mapel baru jika mapel tsb belum memiliki akun
-      (finalSekolah.guruMapelList || []).forEach((gm) => {
-        if (gm.nama.trim()) {
-          const exists = updated.some(
-            (u) => u.role === 'guru_mapel' && u.kodeMapel === gm.kodeMapel
-          );
-          if (!exists) {
-            updated.push({
-              id: `user-gm-${gm.kodeMapel.toLowerCase()}`,
-              nama: gm.nama.trim(),
-              nip: gm.nip || '-',
-              role: 'guru_mapel',
-              kodeMapel: gm.kodeMapel,
-              namaMapel: gm.namaMapel,
-              password: 'guru123',
-            });
-          }
-        }
-      });
-
-      return updated;
+      }
+      return u;
     });
+
+    // Tambahkan akun Wali Kelas baru jika tingkat tsb belum memiliki akun
+    TINGKAT_KELAS_SD.forEach((t) => {
+      const entry = finalSekolah.waliKelasPerTingkat?.[t.kode];
+      if (entry && entry.nama.trim()) {
+        const exists = updatedUsers.some(
+          (u) => u.role === 'wali_kelas' && normalizeKelasCode(u.kelasAjar || 'V') === t.kode
+        );
+        if (!exists) {
+          updatedUsers.push({
+            id: `user-wali-${t.angka}`,
+            nama: entry.nama.trim(),
+            nip: entry.nip || '-',
+            role: 'wali_kelas',
+            kelasAjar: t.kode,
+            password: 'wali123',
+          });
+        }
+      }
+    });
+
+    // Tambahkan akun Guru Mapel baru jika mapel tsb belum memiliki akun
+    (finalSekolah.guruMapelList || []).forEach((gm) => {
+      if (gm.nama.trim()) {
+        const exists = updatedUsers.some(
+          (u) => u.role === 'guru_mapel' && u.kodeMapel === gm.kodeMapel
+        );
+        if (!exists) {
+          updatedUsers.push({
+            id: `user-gm-${gm.kodeMapel.toLowerCase()}`,
+            nama: gm.nama.trim(),
+            nip: gm.nip || '-',
+            role: 'guru_mapel',
+            kodeMapel: gm.kodeMapel,
+            namaMapel: gm.namaMapel,
+            password: 'guru123',
+          });
+        }
+      }
+    });
+
+    setUserAccounts(updatedUsers);
+
+    if (syncNow) {
+      void pushSyncToServer(
+        { sekolah: finalSekolah, userAccounts: updatedUsers },
+        'saveSekolah',
+        'Menyimpan Identitas Sekolah & Penugasan Guru ke Google Sheets...',
+        true
+      );
+    }
   };
 
   const handlePrint = () => {
@@ -829,6 +1251,8 @@ export default function App() {
         users={userAccounts}
         kurikulum={kurikulum}
         onLoginSuccess={applySessionAndRoute}
+        serverSyncStatus={loginSyncStatus}
+        onRefreshFromSheets={() => void pullSyncFromServer('manual')}
       />
     );
   }
@@ -1256,7 +1680,9 @@ export default function App() {
         isOpen={isGasModalOpen}
         onClose={() => setIsGasModalOpen(false)}
         onSaveToGoogleSheets={handleSaveToGoogleSheets}
+        onLoadFromGoogleSheets={() => pullSyncFromServer('manual')}
         isSaving={isSavingToSheets}
+        isLoadingFromSheets={isLoadingFromSheets}
       />
 
       {/* MODAL: EDIT PROFIL SEKOLAH & TITIMANGSA */}
@@ -1414,10 +1840,13 @@ export default function App() {
                       type="text"
                       value={sekolah.namaWaliKelas}
                       onChange={(e) =>
-                        handleUpdateSekolahAndSyncUsers({
-                          ...sekolah,
-                          namaWaliKelas: e.target.value,
-                        })
+                        handleUpdateSekolahAndSyncUsers(
+                          {
+                            ...sekolah,
+                            namaWaliKelas: e.target.value,
+                          },
+                          false
+                        )
                       }
                       className="w-full bg-slate-50 border border-slate-300 rounded-lg p-2 font-medium"
                     />
@@ -1428,17 +1857,20 @@ export default function App() {
                       type="text"
                       value={sekolah.nipWaliKelas}
                       onChange={(e) =>
-                        handleUpdateSekolahAndSyncUsers({
-                          ...sekolah,
-                          nipWaliKelas: e.target.value,
-                          waliKelasPerTingkat: {
-                            ...(sekolah.waliKelasPerTingkat || {}),
-                            V: {
-                              nama: sekolah.waliKelasPerTingkat?.V?.nama || sekolah.namaWaliKelas,
-                              nip: e.target.value,
+                        handleUpdateSekolahAndSyncUsers(
+                          {
+                            ...sekolah,
+                            nipWaliKelas: e.target.value,
+                            waliKelasPerTingkat: {
+                              ...(sekolah.waliKelasPerTingkat || {}),
+                              V: {
+                                nama: sekolah.waliKelasPerTingkat?.V?.nama || sekolah.namaWaliKelas,
+                                nip: e.target.value,
+                              },
                             },
                           },
-                        })
+                          false
+                        )
                       }
                       placeholder="-"
                       className="w-full bg-slate-50 border border-slate-300 rounded-lg p-2"
@@ -1494,11 +1926,14 @@ export default function App() {
                                 ...(sekolah.waliKelasPerTingkat || {}),
                                 [t.kode]: { ...entry, nama: e.target.value },
                               };
-                              handleUpdateSekolahAndSyncUsers({
-                                ...sekolah,
-                                waliKelasPerTingkat: nextMap,
-                                namaWaliKelas: t.kode === 'V' ? e.target.value : sekolah.namaWaliKelas,
-                              });
+                              handleUpdateSekolahAndSyncUsers(
+                                {
+                                  ...sekolah,
+                                  waliKelasPerTingkat: nextMap,
+                                  namaWaliKelas: t.kode === 'V' ? e.target.value : sekolah.namaWaliKelas,
+                                },
+                                false
+                              );
                             }}
                             placeholder={`Nama Wali Kelas ${t.angka}...`}
                             className="w-full bg-white border border-slate-300 rounded px-2 py-1 font-medium"
@@ -1513,11 +1948,14 @@ export default function App() {
                                 ...(sekolah.waliKelasPerTingkat || {}),
                                 [t.kode]: { ...entry, nip: e.target.value },
                               };
-                              handleUpdateSekolahAndSyncUsers({
-                                ...sekolah,
-                                waliKelasPerTingkat: nextMap,
-                                nipWaliKelas: t.kode === 'V' ? e.target.value : sekolah.nipWaliKelas,
-                              });
+                              handleUpdateSekolahAndSyncUsers(
+                                {
+                                  ...sekolah,
+                                  waliKelasPerTingkat: nextMap,
+                                  nipWaliKelas: t.kode === 'V' ? e.target.value : sekolah.nipWaliKelas,
+                                },
+                                false
+                              );
                             }}
                             placeholder="NIP..."
                             className="w-full bg-white border border-slate-300 rounded px-2 py-1"
@@ -1540,19 +1978,22 @@ export default function App() {
                     type="button"
                     onClick={() => {
                       const def = kurikulum[0];
-                      handleUpdateSekolahAndSyncUsers({
-                        ...sekolah,
-                        guruMapelList: [
-                          ...(sekolah.guruMapelList || []),
-                          {
-                            id: `gm-${Date.now()}`,
-                            kodeMapel: def?.kodeMapel || 'PAK-01',
-                            namaMapel: def?.namaMapel || 'Pendidikan Agama',
-                            nama: '',
-                            nip: '-',
-                          },
-                        ],
-                      });
+                      handleUpdateSekolahAndSyncUsers(
+                        {
+                          ...sekolah,
+                          guruMapelList: [
+                            ...(sekolah.guruMapelList || []),
+                            {
+                              id: `gm-${Date.now()}`,
+                              kodeMapel: def?.kodeMapel || 'PAK-01',
+                              namaMapel: def?.namaMapel || 'Pendidikan Agama',
+                              nama: '',
+                              nip: '-',
+                            },
+                          ],
+                        },
+                        false
+                      );
                     }}
                     className="px-2 py-1 bg-amber-600 hover:bg-amber-700 text-white rounded text-[11px] font-bold flex items-center gap-1"
                   >
@@ -1567,14 +2008,17 @@ export default function App() {
                           value={gm.kodeMapel}
                           onChange={(e) => {
                             const mapelObj = kurikulum.find((m) => m.kodeMapel === e.target.value);
-                            handleUpdateSekolahAndSyncUsers({
-                              ...sekolah,
-                              guruMapelList: (sekolah.guruMapelList || []).map((item) =>
-                                item.id === gm.id
-                                  ? { ...item, kodeMapel: e.target.value, namaMapel: mapelObj?.namaMapel || item.namaMapel }
-                                  : item
-                              ),
-                            });
+                            handleUpdateSekolahAndSyncUsers(
+                              {
+                                ...sekolah,
+                                guruMapelList: (sekolah.guruMapelList || []).map((item) =>
+                                  item.id === gm.id
+                                    ? { ...item, kodeMapel: e.target.value, namaMapel: mapelObj?.namaMapel || item.namaMapel }
+                                    : item
+                                ),
+                              },
+                              false
+                            );
                           }}
                           className="w-full bg-white border border-slate-300 rounded px-1.5 py-1 font-bold"
                         >
@@ -1590,12 +2034,15 @@ export default function App() {
                           type="text"
                           value={gm.nama}
                           onChange={(e) =>
-                            handleUpdateSekolahAndSyncUsers({
-                              ...sekolah,
-                              guruMapelList: (sekolah.guruMapelList || []).map((item) =>
-                                item.id === gm.id ? { ...item, nama: e.target.value } : item
-                              ),
-                            })
+                            handleUpdateSekolahAndSyncUsers(
+                              {
+                                ...sekolah,
+                                guruMapelList: (sekolah.guruMapelList || []).map((item) =>
+                                  item.id === gm.id ? { ...item, nama: e.target.value } : item
+                                ),
+                              },
+                              false
+                            )
                           }
                           placeholder="Nama Guru..."
                           className="w-full bg-white border border-slate-300 rounded px-2 py-1 font-medium"
@@ -1606,12 +2053,15 @@ export default function App() {
                           type="text"
                           value={gm.nip}
                           onChange={(e) =>
-                            handleUpdateSekolahAndSyncUsers({
-                              ...sekolah,
-                              guruMapelList: (sekolah.guruMapelList || []).map((item) =>
-                                item.id === gm.id ? { ...item, nip: e.target.value } : item
-                              ),
-                            })
+                            handleUpdateSekolahAndSyncUsers(
+                              {
+                                ...sekolah,
+                                guruMapelList: (sekolah.guruMapelList || []).map((item) =>
+                                  item.id === gm.id ? { ...item, nip: e.target.value } : item
+                                ),
+                              },
+                              false
+                            )
                           }
                           placeholder="NIP..."
                           className="w-full bg-white border border-slate-300 rounded px-2 py-1"
@@ -1621,10 +2071,13 @@ export default function App() {
                         <button
                           type="button"
                           onClick={() =>
-                            handleUpdateSekolahAndSyncUsers({
-                              ...sekolah,
-                              guruMapelList: (sekolah.guruMapelList || []).filter((item) => item.id !== gm.id),
-                            })
+                            handleUpdateSekolahAndSyncUsers(
+                              {
+                                ...sekolah,
+                                guruMapelList: (sekolah.guruMapelList || []).filter((item) => item.id !== gm.id),
+                              },
+                              false
+                            )
                           }
                           className="p-1 text-rose-600 hover:bg-rose-50 rounded"
                           title="Hapus"
@@ -1664,7 +2117,10 @@ export default function App() {
             <div className="pt-3 border-t border-slate-200 flex justify-end">
               <button
                 type="button"
-                onClick={() => setIsSettingsOpen(false)}
+                onClick={() => {
+                  handleUpdateSekolahAndSyncUsers(sekolah, true);
+                  setIsSettingsOpen(false);
+                }}
                 className="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-xl shadow-xs transition"
               >
                 Simpan &amp; Tutup

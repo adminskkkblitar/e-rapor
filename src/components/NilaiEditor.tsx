@@ -1012,8 +1012,31 @@ export const NilaiEditor: React.FC<NilaiEditorProps> = ({
               </select>
             </div>
 
-            <div className="text-xs text-slate-500">
-              Siswa terpilih: <strong className="text-slate-900">{activeSiswa.nama}</strong> ({activeSiswa.nis}) • {activeFase}
+            <div className="flex flex-wrap items-center gap-3">
+              <div className="text-xs text-slate-500">
+                Siswa terpilih: <strong className="text-slate-900">{activeSiswa.nama}</strong> ({activeSiswa.nis}) • {activeFase}
+              </div>
+              {onSaveToGoogleSheets && (
+                <button
+                  type="button"
+                  onClick={onSaveToGoogleSheets}
+                  disabled={isSavingToSheets}
+                  className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-2xs transition"
+                  title="Simpan nilai siswa ke Google Sheets"
+                >
+                  {isSavingToSheets ? (
+                    <>
+                      <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                      Menyimpan ke Sheets...
+                    </>
+                  ) : (
+                    <>
+                      <UploadCloud className="w-3.5 h-3.5" />
+                      Simpan ke Google Sheets
+                    </>
+                  )}
+                </button>
+              )}
             </div>
           </div>
 

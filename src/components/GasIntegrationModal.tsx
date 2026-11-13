@@ -4,7 +4,9 @@ import {
   GOOGLE_SHEETS_HEADERS,
 } from '../utils/gasCode';
 import {
+  DEFAULT_GAS_WEBAPP_URL,
   getStoredGasUrl,
+  isPlaceholderGasUrl,
   setStoredGasUrl,
   testGasConnection as testGasService,
 } from '../utils/gasSyncService';
@@ -15,6 +17,7 @@ import {
   Code,
   Copy,
   Database,
+  DownloadCloud,
   ExternalLink,
   FileSpreadsheet,
   Globe,
@@ -34,14 +37,18 @@ interface GasIntegrationModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSaveToGoogleSheets?: () => Promise<void>;
+  onLoadFromGoogleSheets?: () => Promise<void>;
   isSaving?: boolean;
+  isLoadingFromSheets?: boolean;
 }
 
 export const GasIntegrationModal: React.FC<GasIntegrationModalProps> = ({
   isOpen,
   onClose,
   onSaveToGoogleSheets,
+  onLoadFromGoogleSheets,
   isSaving = false,
+  isLoadingFromSheets = false,
 }) => {
   const [activeTab, setActiveTab] = useState<'headers' | 'codegs' | 'cloudflare' | 'guide'>('guide');
   const [copiedSection, setCopiedSection] = useState<string | null>(null);
@@ -70,6 +77,13 @@ export const GasIntegrationModal: React.FC<GasIntegrationModalProps> = ({
     setTimeout(() => setUrlSaveSuccess(false), 2500);
   };
 
+  const handleResetToDefaultUrl = () => {
+    setGasUrlInput(DEFAULT_GAS_WEBAPP_URL);
+    setStoredGasUrl(DEFAULT_GAS_WEBAPP_URL);
+    setUrlSaveSuccess(true);
+    setTimeout(() => setUrlSaveSuccess(false), 2500);
+  };
+
   const runTestConnection = async () => {
     if (!gasUrlInput.trim()) {
       setTestResult({
@@ -94,6 +108,15 @@ export const GasIntegrationModal: React.FC<GasIntegrationModalProps> = ({
     }
   };
 
+  const handleTriggerLoad = async () => {
+    setStoredGasUrl(gasUrlInput);
+    if (onLoadFromGoogleSheets) {
+      await onLoadFromGoogleSheets();
+    }
+  };
+
+  const usingPlaceholder = isPlaceholderGasUrl(gasUrlInput);
+
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-6 no-print">
       <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-5xl max-h-[92vh] flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-150">
@@ -107,11 +130,11 @@ export const GasIntegrationModal: React.FC<GasIntegrationModalProps> = ({
               <h2 className="text-lg font-bold flex items-center gap-2">
                 Integrasi Google Apps Script (GAS) & Google Sheets API
                 <span className="text-[10px] bg-emerald-500/30 text-emerald-300 border border-emerald-500/40 px-2 py-0.5 rounded-full font-semibold">
-                  API & Sync Aktif
+                  Auto-Sync Lintas Perangkat
                 </span>
               </h2>
               <p className="text-xs text-slate-400">
-                Hubungkan frontend E-Rapor ke basis data Google Sheets dengan skrip <code>doGet()</code> dan <code>doPost()</code>.
+                Hubungkan frontend E-Rapor ke basis data Google Sheets (Akun Guru, Sekolah, Siswa, & Nilai) via <code>doGet()</code> dan <code>doPost()</code>.
               </p>
             </div>
           </div>
@@ -134,7 +157,7 @@ export const GasIntegrationModal: React.FC<GasIntegrationModalProps> = ({
             }`}
           >
             <Terminal className="w-4 h-4 text-emerald-600" />
-            1. Simpan & Uji Endpoint Web App (doGet / doPost)
+            1. Simpan, Tarik & Uji Endpoint (doGet / doPost)
           </button>
           <button
             onClick={() => setActiveTab('codegs')}
@@ -156,7 +179,7 @@ export const GasIntegrationModal: React.FC<GasIntegrationModalProps> = ({
             }`}
           >
             <FileSpreadsheet className="w-4 h-4" />
-            3. Struktur 7 Header Sheet
+            3. Struktur {GOOGLE_SHEETS_HEADERS.length} Header Sheet
           </button>
           <button
             onClick={() => setActiveTab('cloudflare')}
@@ -186,15 +209,36 @@ export const GasIntegrationModal: React.FC<GasIntegrationModalProps> = ({
                       URL Web App Google Apps Script
                     </h3>
                     <p className="text-xs text-emerald-800 mt-0.5 max-w-2xl leading-relaxed">
-                      Masukkan URL Web App hasil deploy skrip <code>Code.gs</code> dari Google Spreadsheet Anda. Frontend akan mengirimkan data form terbaru langsung via <code>fetch()</code> ke endpoint <code>doPost()</code> ini.
+                      Aplikasi secara otomatis menarik data dari server saat dibuka/login (<code>doGet</code>) dan menyimpan otomatis ke Google Sheets setiap kali ada perubahan data Guru, Sekolah, Siswa, atau Nilai (<code>doPost</code>).
                     </p>
                   </div>
 
-                  <div className="flex items-center gap-2 shrink-0">
+                  <div className="flex flex-wrap items-center gap-2 shrink-0">
+                    {onLoadFromGoogleSheets && (
+                      <button
+                        type="button"
+                        onClick={handleTriggerLoad}
+                        disabled={isLoadingFromSheets || isSaving}
+                        className="px-3.5 py-2.5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white font-bold text-xs rounded-xl flex items-center gap-2 shadow-xs transition"
+                      >
+                        {isLoadingFromSheets ? (
+                          <>
+                            <RefreshCw className="w-4 h-4 animate-spin" />
+                            Menarik Data...
+                          </>
+                        ) : (
+                          <>
+                            <DownloadCloud className="w-4 h-4" />
+                            Tarik Data dari Sheets
+                          </>
+                        )}
+                      </button>
+                    )}
+
                     <button
                       type="button"
                       onClick={handleTriggerSave}
-                      disabled={isSaving}
+                      disabled={isSaving || isLoadingFromSheets}
                       className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-bold text-xs rounded-xl flex items-center gap-2 shadow-xs transition"
                     >
                       {isSaving ? (
@@ -214,9 +258,18 @@ export const GasIntegrationModal: React.FC<GasIntegrationModalProps> = ({
 
                 <div className="mt-4 pt-4 border-t border-emerald-200/60 space-y-3">
                   <div>
-                    <label className="block text-xs font-bold text-emerald-950 mb-1">
-                      URL Web App Google Apps Script (Deployment ID / Exec URL):
-                    </label>
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="block text-xs font-bold text-emerald-950">
+                        URL Web App Google Apps Script (Deployment ID / Exec URL):
+                      </label>
+                      <button
+                        type="button"
+                        onClick={handleResetToDefaultUrl}
+                        className="text-[11px] font-bold text-indigo-700 hover:underline"
+                      >
+                        Gunakan URL Default Kode
+                      </button>
+                    </div>
                     <div className="flex flex-col sm:flex-row gap-2">
                       <input
                         type="url"
@@ -253,6 +306,39 @@ export const GasIntegrationModal: React.FC<GasIntegrationModalProps> = ({
                           )}
                         </button>
                       </div>
+                    </div>
+                  </div>
+
+                  {/* Permanent Default Constant Notice */}
+                  <div
+                    className={`p-3 rounded-xl border text-[11px] leading-relaxed flex items-start gap-2 ${
+                      usingPlaceholder
+                        ? 'bg-amber-50 border-amber-300 text-amber-950'
+                        : 'bg-white/80 border-emerald-200 text-emerald-950'
+                    }`}
+                  >
+                    <AlertCircle
+                      className={`w-4 h-4 shrink-0 mt-0.5 ${
+                        usingPlaceholder ? 'text-amber-600' : 'text-emerald-600'
+                      }`}
+                    />
+                    <div>
+                      <strong>Sinkronisasi Permanen Lintas Perangkat (HP &amp; Laptop):</strong>{' '}
+                      Nilai default URL Web App GAS tersimpan permanen di konstanta{' '}
+                      <code className="bg-slate-100 px-1 rounded">DEFAULT_GAS_WEBAPP_URL</code> pada{' '}
+                      <code className="bg-slate-100 px-1 rounded">src/utils/gasSyncService.ts</code> (atau{' '}
+                      <code className="bg-slate-100 px-1 rounded">VITE_GAS_WEBAPP_URL</code>).{' '}
+                      {usingPlaceholder ? (
+                        <span>
+                          Saat ini URL masih memakai URL contoh bawaan. Ganti konstanta tersebut dengan URL{' '}
+                          <code className="bg-amber-100 px-1 rounded">/exec</code> milik sekolah Anda agar semua pengguna di HP/laptop lain langsung terhubung tanpa perlu mengatur ulang.
+                        </span>
+                      ) : (
+                        <span>
+                          Pastikan URL Web App aktif di atas juga diset pada konstanta{' '}
+                          <code className="bg-slate-100 px-1 rounded">DEFAULT_GAS_WEBAPP_URL</code> sebelum deploy jika ingin semua perangkat baru otomatis menggunakannya.
+                        </span>
+                      )}
                     </div>
                   </div>
 
@@ -367,10 +453,10 @@ export const GasIntegrationModal: React.FC<GasIntegrationModalProps> = ({
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-emerald-50/70 p-4 rounded-xl border border-emerald-200">
                 <div>
                   <h3 className="text-sm font-bold text-emerald-950">
-                    Struktur 7 Sheet Relasional Basis Data Google Sheets
+                    Struktur {GOOGLE_SHEETS_HEADERS.length} Sheet Relasional Basis Data Google Sheets
                   </h3>
                   <p className="text-xs text-emerald-800">
-                    Seluruh sheet ini dapat digenerate otomatis menggunakan fungsi <code>setupDatabaseSheets()</code> di tab <strong>2. Otomasi Code.gs</strong>.
+                    Seluruh sheet ini dapat digenerate otomatis menggunakan fungsi <code>setupDatabaseSheets()</code> di tab <strong>2. Skrip Lengkap Code.gs</strong>.
                   </p>
                 </div>
                 <button

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { MasterKurikulumMapel, ProfilSekolah, TingkatKelasSD, UserAccount, UserRole, UserSession } from '../types/rapor';
 import { TINGKAT_KELAS_SD, getFaseFromKelas, getWaliKelasForSiswa, normalizeKelasCode } from '../utils/raporCalculations';
 import {
@@ -8,8 +8,10 @@ import {
   ShieldCheck,
   UserCheck,
   AlertCircle,
+  CheckCircle2,
   Eye,
   EyeOff,
+  RefreshCw,
   Sparkles,
   BookOpen,
 } from 'lucide-react';
@@ -19,6 +21,11 @@ interface LoginPageProps {
   users: UserAccount[];
   kurikulum: MasterKurikulumMapel[];
   onLoginSuccess: (session: UserSession) => void;
+  serverSyncStatus?: {
+    type: 'loading' | 'success' | 'info' | 'error';
+    message: string;
+  } | null;
+  onRefreshFromSheets?: () => void;
 }
 
 export const LoginPage: React.FC<LoginPageProps> = ({
@@ -26,31 +33,57 @@ export const LoginPage: React.FC<LoginPageProps> = ({
   users,
   kurikulum,
   onLoginSuccess,
+  serverSyncStatus,
+  onRefreshFromSheets,
 }) => {
   // Selected role
   const [selectedRole, setSelectedRole] = useState<UserRole>('wali_kelas');
   
   // Selected or typed teacher name
-  const [namaGuru, setNamaGuru] = useState<string>('Petrus Apriprasetyo, S.Pd');
-  const [selectedUserId, setSelectedUserId] = useState<string>('user-wali');
+  const defaultWali = users.find((u) => u.id === 'user-wali') || users.find((u) => u.role === 'wali_kelas');
+  const [namaGuru, setNamaGuru] = useState<string>(defaultWali?.nama || 'Petrus Apriprasetyo, S.Pd');
+  const [selectedUserId, setSelectedUserId] = useState<string>(defaultWali?.id || 'user-wali');
 
   // Selected class if Wali Kelas
-  const [kelasWali, setKelasWali] = useState<TingkatKelasSD>('V');
+  const [kelasWali, setKelasWali] = useState<TingkatKelasSD>(
+    normalizeKelasCode(defaultWali?.kelasAjar || 'V')
+  );
   
   // Selected subject if Guru Mapel
   const [kodeMapel, setKodeMapel] = useState<string>('PAK-01');
   
   // Password state
-  const [password, setPassword] = useState<string>('wali123');
+  const [password, setPassword] = useState<string>(defaultWali?.password || 'wali123');
   const [showPassword, setShowPassword] = useState<boolean>(false);
+  const [hasEditedCredentials, setHasEditedCredentials] = useState<boolean>(false);
   
   // Error message
   const [errorMessage, setErrorMessage] = useState<string>('');
+
+  // Sinkronkan nama & akun terpilih saat daftar users baru ditarik dari Google Sheets
+  useEffect(() => {
+    if (hasEditedCredentials) return;
+    const syncedUser =
+      users.find((u) => u.id === selectedUserId) ||
+      users.find((u) => u.role === selectedRole);
+    if (syncedUser) {
+      setSelectedUserId(syncedUser.id);
+      setNamaGuru(syncedUser.nama);
+      setPassword(syncedUser.password);
+      if (syncedUser.role === 'wali_kelas' && syncedUser.kelasAjar) {
+        setKelasWali(normalizeKelasCode(syncedUser.kelasAjar));
+      }
+      if (syncedUser.kodeMapel) {
+        setKodeMapel(syncedUser.kodeMapel);
+      }
+    }
+  }, [users, selectedUserId, selectedRole, hasEditedCredentials]);
 
   // Handle changing user from preset list
   const handleSelectPresetUser = (userId: string) => {
     const user = users.find((u) => u.id === userId);
     if (!user) return;
+    setHasEditedCredentials(true);
     setSelectedUserId(user.id);
     setNamaGuru(user.nama);
     setSelectedRole(user.role);
@@ -66,6 +99,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({
 
   // Handle changing class for Wali Kelas
   const handleSelectKelasWali = (kelas: TingkatKelasSD) => {
+    setHasEditedCredentials(true);
     setKelasWali(kelas);
     setErrorMessage('');
     const matchedWali = users.find(
@@ -86,6 +120,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({
 
   // Handle role change
   const handleChangeRole = (role: UserRole) => {
+    setHasEditedCredentials(true);
     setSelectedRole(role);
     setErrorMessage('');
     
@@ -140,7 +175,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({
     );
 
     if (matchedUser) {
-      if (matchedUser.password !== password && password !== 'admin123' && password !== 'guru123' && password !== 'wali123') {
+      if (matchedUser.password !== password) {
         setErrorMessage('Kata sandi salah. Silakan periksa kembali kata sandi Anda.');
         return;
       }
@@ -238,6 +273,43 @@ export const LoginPage: React.FC<LoginPageProps> = ({
 
         {/* Form Body */}
         <div className="p-6 sm:p-8">
+          {/* Status Sinkronisasi Otomatis dari Server Google Sheets */}
+          {serverSyncStatus && (
+            <div
+              className={`mb-4 px-3.5 py-2.5 rounded-xl border flex items-center justify-between gap-2 text-[11px] font-semibold ${
+                serverSyncStatus.type === 'loading'
+                  ? 'bg-sky-500/10 border-sky-400/30 text-sky-200'
+                  : serverSyncStatus.type === 'success'
+                  ? 'bg-emerald-500/10 border-emerald-400/30 text-emerald-200'
+                  : serverSyncStatus.type === 'info'
+                  ? 'bg-amber-500/10 border-amber-400/30 text-amber-200'
+                  : 'bg-rose-500/10 border-rose-400/30 text-rose-200'
+              }`}
+            >
+              <div className="flex items-center gap-2">
+                {serverSyncStatus.type === 'loading' && (
+                  <RefreshCw className="w-3.5 h-3.5 text-sky-400 animate-spin shrink-0" />
+                )}
+                {serverSyncStatus.type === 'success' && (
+                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                )}
+                {(serverSyncStatus.type === 'info' || serverSyncStatus.type === 'error') && (
+                  <AlertCircle className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                )}
+                <span>{serverSyncStatus.message}</span>
+              </div>
+              {onRefreshFromSheets && serverSyncStatus.type !== 'loading' && (
+                <button
+                  type="button"
+                  onClick={onRefreshFromSheets}
+                  className="px-2 py-1 rounded-lg bg-white/10 hover:bg-white/20 text-white text-[10px] font-bold shrink-0 transition"
+                >
+                  Muat Ulang
+                </button>
+              )}
+            </div>
+          )}
+
           <form onSubmit={handleSubmit} className="space-y-5">
             {/* Error Message */}
             {errorMessage && (
@@ -346,7 +418,10 @@ export const LoginPage: React.FC<LoginPageProps> = ({
               <input
                 type="text"
                 value={namaGuru}
-                onChange={(e) => setNamaGuru(e.target.value)}
+                onChange={(e) => {
+                  setHasEditedCredentials(true);
+                  setNamaGuru(e.target.value);
+                }}
                 placeholder="Contoh: Petrus Apriprasetyo, S.Pd"
                 className="mt-2 w-full bg-slate-800/60 border border-slate-700/80 rounded-xl px-3.5 py-2 text-xs font-medium text-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500"
               />
@@ -423,7 +498,10 @@ export const LoginPage: React.FC<LoginPageProps> = ({
                   type={showPassword ? 'text' : 'password'}
                   required
                   value={password}
-                  onChange={(e) => setPassword(e.target.value)}
+                  onChange={(e) => {
+                    setHasEditedCredentials(true);
+                    setPassword(e.target.value);
+                  }}
                   placeholder="Masukkan kata sandi..."
                   className="w-full bg-slate-800/90 border border-slate-700 rounded-xl pl-10 pr-10 py-2.5 text-xs font-semibold text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
                 />

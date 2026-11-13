@@ -1,6 +1,6 @@
 /**
  * Definisi Header Kolom Google Sheets dan Source Code Google Apps Script (Code.gs)
- * Siap untuk diintegrasikan dengan Frontend yang di-deploy di Cloudflare Pages
+ * Siap untuk diintegrasikan dengan Frontend E-Rapor (Desktop & Mobile Browser)
  */
 
 export interface SheetHeaderDefinition {
@@ -11,8 +11,48 @@ export interface SheetHeaderDefinition {
 
 export const GOOGLE_SHEETS_HEADERS: SheetHeaderDefinition[] = [
   {
+    sheetName: 'Identitas_Sekolah',
+    description:
+      'Menyimpan Identitas Sekolah, Kepala Sekolah, Titimangsa, Wali Kelas 1-6, serta daftar Guru Mapel (tersinkron lintas perangkat)',
+    columns: [
+      'Key',
+      'Nama_Sekolah',
+      'NPSN',
+      'Tahun_Pelajaran',
+      'Nama_Kepala_Sekolah',
+      'NIP_Kepala_Sekolah',
+      'Nama_Wali_Kelas_Default',
+      'NIP_Wali_Kelas_Default',
+      'Alamat_Sekolah',
+      'Kelurahan',
+      'Kecamatan',
+      'Kota_Kabupaten',
+      'Provinsi',
+      'Titimangsa_Tempat',
+      'Titimangsa_Tanggal',
+      'Profil_Lengkap_JSON',
+    ],
+  },
+  {
+    sheetName: 'Akun_Guru',
+    description:
+      'Menyimpan seluruh akun login Administrator, Wali Kelas (1-6), dan Guru Mapel beserta Password masuknya',
+    columns: [
+      'ID_Akun',
+      'Nama_Guru',
+      'NIP',
+      'Peran_Role',
+      'Kelas_Ajar',
+      'Kode_Mapel',
+      'Nama_Mapel',
+      'Password',
+      'Email',
+    ],
+  },
+  {
     sheetName: 'Data_Siswa',
-    description: 'Menyimpan identitas lengkap siswa untuk biodata, Sampul Rapor, dan halaman Identitas Peserta Didik',
+    description:
+      'Menyimpan identitas lengkap siswa untuk biodata, Sampul Rapor, dan halaman Identitas Peserta Didik',
     columns: [
       'NIS',
       'NISN',
@@ -36,11 +76,14 @@ export const GOOGLE_SHEETS_HEADERS: SheetHeaderDefinition[] = [
       'Nama_Wali',
       'Pekerjaan_Wali',
       'Alamat_Wali',
+      'Nama_Panggilan',
+      'Telepon',
     ],
   },
   {
     sheetName: 'Master_Kurikulum',
-    description: 'Mengikat Mata Pelajaran, CP, ATP, dan teks narasi untuk 25 TP (TP_1 hingga TP_25)',
+    description:
+      'Mengikat Mata Pelajaran, CP, ATP, dan teks narasi untuk 25 TP (TP_1 hingga TP_25) serta detail Fase A/B/C',
     columns: [
       'Kode_Mapel',
       'Nama_Mapel',
@@ -72,6 +115,7 @@ export const GOOGLE_SHEETS_HEADERS: SheetHeaderDefinition[] = [
       'TP_23',
       'TP_24',
       'TP_25',
+      'Detail_Fase_JSON',
     ],
   },
   {
@@ -123,6 +167,7 @@ export const GOOGLE_SHEETS_HEADERS: SheetHeaderDefinition[] = [
       'SAS',
       'Rata_Sumatif',
       'Nilai_Akhir',
+      'Deskripsi_Capaian',
     ],
   },
   {
@@ -131,27 +176,28 @@ export const GOOGLE_SHEETS_HEADERS: SheetHeaderDefinition[] = [
     columns: [
       'NIS',
       'Semester',
-      'Dimensi_1_Iman_Taqwa_Predikat',
+      'Dimensi_1_Predikat',
       'Dimensi_1_Catatan',
-      'Dimensi_2_Kewargaan_Predikat',
+      'Dimensi_2_Predikat',
       'Dimensi_2_Catatan',
-      'Dimensi_3_Penalaran_Kritis_Predikat',
+      'Dimensi_3_Predikat',
       'Dimensi_3_Catatan',
-      'Dimensi_4_Kreativitas_Predikat',
+      'Dimensi_4_Predikat',
       'Dimensi_4_Catatan',
-      'Dimensi_5_Kolaborasi_Predikat',
+      'Dimensi_5_Predikat',
       'Dimensi_5_Catatan',
-      'Dimensi_6_Kemandirian_Predikat',
+      'Dimensi_6_Predikat',
       'Dimensi_6_Catatan',
-      'Dimensi_7_Komunikasi_Predikat',
+      'Dimensi_7_Predikat',
       'Dimensi_7_Catatan',
-      'Dimensi_8_Kebugaran_Karakter_Predikat',
+      'Dimensi_8_Predikat',
       'Dimensi_8_Catatan',
+      'Dimensi_Lengkap_JSON',
     ],
   },
   {
     sheetName: 'Ekstrakurikuler',
-    description: 'Mendukung pengisian dinamis >2 kegiatan ekstrakurikuler per siswa',
+    description: 'Mendukung pengisian dinamis kegiatan ekstrakurikuler per siswa',
     columns: [
       'NIS',
       'Semester',
@@ -167,11 +213,27 @@ export const GOOGLE_SHEETS_HEADERS: SheetHeaderDefinition[] = [
       'Ekstra_4_Nama',
       'Ekstra_4_Predikat',
       'Ekstra_4_Deskripsi',
+      'Daftar_Ekstra_JSON',
+    ],
+  },
+  {
+    sheetName: 'Absensi_Dan_Catatan',
+    description: 'Rekapitulasi Absensi (Sakit/Izin/Alpa), Catatan Wali Kelas Custom, dan Status Kenaikan Kelas',
+    columns: [
+      'NIS',
+      'Semester',
+      'Sakit',
+      'Izin',
+      'Tanpa_Keterangan',
+      'Catatan_Wali_Kelas_Custom',
+      'Status_Kenaikan',
+      'Target_Kelas',
     ],
   },
   {
     sheetName: 'Leger_Nilai',
-    description: 'Rekapitulasi lengkap seluruh Nilai Akhir tiap mapel, total nilai, rata-rata, peringkat terselubung, dan status kenaikan kelas',
+    description:
+      'Rekapitulasi lengkap seluruh Nilai Akhir tiap mapel, total nilai, rata-rata, peringkat terselubung, dan status kenaikan kelas',
     columns: [
       'NIS',
       'Nama_Siswa',
@@ -202,43 +264,54 @@ export const GOOGLE_SHEETS_HEADERS: SheetHeaderDefinition[] = [
 export const GOOGLE_APPS_SCRIPT_CODE_GS = `/**
  * ============================================================================
  * SISTEM INFORMASI RAPOR BERBASIS WEB - KURIKULUM DEEP LEARNING & 8 DIMENSI
- * Google Apps Script Backend (Code.gs)
- * Siap untuk diintegrasikan dengan Frontend di Cloudflare Pages / Workers
+ * Google Apps Script Backend (Code.gs) - Sinkronisasi Penuh Lintas Perangkat
  * Satuan Pendidikan: SD KRISTEN KALAM KUDUS BLITAR
- * Wali Kelas: Petrus Apriprasetyo, S.Pd | Kepala Sekolah: Dian Natalia Widiasih, S.Psi
+ * Mendukung Sinkronisasi: Identitas Sekolah, Akun & Password Guru, Data Siswa,
+ * Master Kurikulum (Fase A-C), Nilai Formatif 25 TP, Sumatif, Kokurikuler,
+ * Ekstrakurikuler, Absensi, Catatan Wali Kelas, & Leger Nilai.
  * ============================================================================
  */
 
 const SHEET_NAMES = {
+  IDENTITAS_SEKOLAH: 'Identitas_Sekolah',
+  AKUN_GURU: 'Akun_Guru',
   DATA_SISWA: 'Data_Siswa',
   MASTER_KURIKULUM: 'Master_Kurikulum',
   NILAI_FORMATIF: 'Nilai_Formatif',
   NILAI_SUMATIF: 'Nilai_Sumatif',
   KOKURIKULER: 'Kokurikuler_8_Dimensi',
   EKSTRAKURIKULER: 'Ekstrakurikuler',
+  ABSENSI_CATATAN: 'Absensi_Dan_Catatan',
   LEGER_NILAI: 'Leger_Nilai',
 };
 
 /**
  * 1. FUNGSI SETUP OTOMATIS SELURUH SHEET & HEADER (SEKALI KLIK)
- * Buka Apps Script Editor, pilih fungsi ini di dropdown toolbar, lalu klik "Run / Jalankan".
- * Seluruh 7 sheet relasional akan otomatis dibuat lengkap dengan styling, freeze rows, dan data awal!
+ * Pilih fungsi ini di dropdown toolbar Apps Script, lalu klik "Run / Jalankan".
  */
 function setupDatabaseSheets() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
 
   const headersConfig = {
+    Identitas_Sekolah: [
+      'Key', 'Nama_Sekolah', 'NPSN', 'Tahun_Pelajaran', 'Nama_Kepala_Sekolah', 'NIP_Kepala_Sekolah',
+      'Nama_Wali_Kelas_Default', 'NIP_Wali_Kelas_Default', 'Alamat_Sekolah', 'Kelurahan', 'Kecamatan',
+      'Kota_Kabupaten', 'Provinsi', 'Titimangsa_Tempat', 'Titimangsa_Tanggal', 'Profil_Lengkap_JSON'
+    ],
+    Akun_Guru: [
+      'ID_Akun', 'Nama_Guru', 'NIP', 'Peran_Role', 'Kelas_Ajar', 'Kode_Mapel', 'Nama_Mapel', 'Password', 'Email'
+    ],
     Data_Siswa: [
       'NIS', 'NISN', 'Nama_Siswa', 'Kelas', 'Fase', 'Tempat_Lahir', 'Tanggal_Lahir',
       'Jenis_Kelamin', 'Agama', 'Alamat_Siswa', 'Nama_Ayah', 'Nama_Ibu', 'Pekerjaan_Ayah', 'Pekerjaan_Ibu',
       'Alamat_Ortu_Jalan', 'Alamat_Ortu_Desa', 'Alamat_Ortu_Kecamatan', 'Alamat_Ortu_Kota', 'Alamat_Ortu_Provinsi',
-      'Nama_Wali', 'Pekerjaan_Wali', 'Alamat_Wali'
+      'Nama_Wali', 'Pekerjaan_Wali', 'Alamat_Wali', 'Nama_Panggilan', 'Telepon'
     ],
     Master_Kurikulum: [
       'Kode_Mapel', 'Nama_Mapel', 'Kelompok', 'Capaian_Pembelajaran_CP', 'Alur_Tujuan_Pembelajaran_ATP',
       'TP_1', 'TP_2', 'TP_3', 'TP_4', 'TP_5', 'TP_6', 'TP_7', 'TP_8', 'TP_9', 'TP_10',
       'TP_11', 'TP_12', 'TP_13', 'TP_14', 'TP_15', 'TP_16', 'TP_17', 'TP_18', 'TP_19', 'TP_20',
-      'TP_21', 'TP_22', 'TP_23', 'TP_24', 'TP_25'
+      'TP_21', 'TP_22', 'TP_23', 'TP_24', 'TP_25', 'Detail_Fase_JSON'
     ],
     Nilai_Formatif: [
       'NIS', 'Kode_Mapel',
@@ -248,25 +321,30 @@ function setupDatabaseSheets() {
     ],
     Nilai_Sumatif: [
       'NIS', 'Kode_Mapel', 'Sumatif_LM_1', 'Sumatif_LM_2', 'Sumatif_LM_3', 'Sumatif_LM_4',
-      'Rata_LM', 'STS', 'SAS', 'Rata_Sumatif', 'Nilai_Akhir'
+      'Rata_LM', 'STS', 'SAS', 'Rata_Sumatif', 'Nilai_Akhir', 'Deskripsi_Capaian'
     ],
     Kokurikuler_8_Dimensi: [
       'NIS', 'Semester',
-      'Dimensi_1_Iman_Taqwa_Predikat', 'Dimensi_1_Catatan',
-      'Dimensi_2_Kewargaan_Predikat', 'Dimensi_2_Catatan',
-      'Dimensi_3_Penalaran_Kritis_Predikat', 'Dimensi_3_Catatan',
-      'Dimensi_4_Kreativitas_Predikat', 'Dimensi_4_Catatan',
-      'Dimensi_5_Kolaborasi_Predikat', 'Dimensi_5_Catatan',
-      'Dimensi_6_Kemandirian_Predikat', 'Dimensi_6_Catatan',
-      'Dimensi_7_Komunikasi_Predikat', 'Dimensi_7_Catatan',
-      'Dimensi_8_Kebugaran_Karakter_Predikat', 'Dimensi_8_Catatan'
+      'Dimensi_1_Predikat', 'Dimensi_1_Catatan',
+      'Dimensi_2_Predikat', 'Dimensi_2_Catatan',
+      'Dimensi_3_Predikat', 'Dimensi_3_Catatan',
+      'Dimensi_4_Predikat', 'Dimensi_4_Catatan',
+      'Dimensi_5_Predikat', 'Dimensi_5_Catatan',
+      'Dimensi_6_Predikat', 'Dimensi_6_Catatan',
+      'Dimensi_7_Predikat', 'Dimensi_7_Catatan',
+      'Dimensi_8_Predikat', 'Dimensi_8_Catatan',
+      'Dimensi_Lengkap_JSON'
     ],
     Ekstrakurikuler: [
       'NIS', 'Semester',
       'Ekstra_1_Nama', 'Ekstra_1_Predikat', 'Ekstra_1_Deskripsi',
       'Ekstra_2_Nama', 'Ekstra_2_Predikat', 'Ekstra_2_Deskripsi',
       'Ekstra_3_Nama', 'Ekstra_3_Predikat', 'Ekstra_3_Deskripsi',
-      'Ekstra_4_Nama', 'Ekstra_4_Predikat', 'Ekstra_4_Deskripsi'
+      'Ekstra_4_Nama', 'Ekstra_4_Predikat', 'Ekstra_4_Deskripsi',
+      'Daftar_Ekstra_JSON'
+    ],
+    Absensi_Dan_Catatan: [
+      'NIS', 'Semester', 'Sakit', 'Izin', 'Tanpa_Keterangan', 'Catatan_Wali_Kelas_Custom', 'Status_Kenaikan', 'Target_Kelas'
     ],
     Leger_Nilai: [
       'NIS', 'Nama_Siswa', 'Kelas', 'Semester',
@@ -292,253 +370,15 @@ function setupDatabaseSheets() {
     sheet.setFrozenRows(1);
   }
 
-  // Seed sample data siswa: ADRY GRACIO SURYAJAYA jika sheet Data_Siswa masih kosong
-  const sheetSiswa = ss.getSheetByName(SHEET_NAMES.DATA_SISWA);
-  if (sheetSiswa.getLastRow() === 1) {
-    sheetSiswa.appendRow([
-      '230101', '0158352348', 'ADRY GRACIO SURYAJAYA', 'V', 'Fase C (Kelas V)', 'Blitar', '14 Maret 2014',
-      'L', 'Kristen Protestan', 'Dsn. Tambak, RT 02/RW 03, Pagergunung, Kesamben, Blitar',
-      'SURYA WIJAYA', 'GRACE SANTOSO', 'WIRASWASTA', 'IBU RUMAH TANGGA',
-      'Dsn. Tambak RT 02/RW 03', 'Pagergunung', 'Kesamben', 'Kab. Blitar', 'Jawa Timur',
-      '-', '-', '-'
-    ]);
-  }
-
-  Logger.log('Inisialisasi 7 Sheet Database Berhasil Dilakukan!');
+  Logger.log('Inisialisasi seluruh Sheet Database E-Rapor Berhasil!');
 }
 
 /**
- * 2. WEB APP API ENDPOINTS (DAPAT DIAKSES OLEH FRONTEND CLOUDFLARE VIA FETCH/CORS)
- */
-function doGet(e) {
-  // Jika parameter action diminta via API JSON (dari Cloudflare frontend)
-  if (e && e.parameter && e.parameter.action) {
-    return handleGetApi(e.parameter.action, e.parameter);
-  }
-
-  // Standalone HTML Web App view
-  return HtmlService.createHtmlOutputFromFile('index')
-    .setTitle('E-Rapor Kurikulum Deep Learning')
-    .setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL)
-    .addMetaTag('viewport', 'width=device-width, initial-scale=1');
-}
-
-function doPost(e) {
-  try {
-    const contents = e.postData.contents;
-    const body = JSON.parse(contents);
-    const action = body.action;
-    const result = handlePostApi(action, body.data);
-    return createJsonResponse({ status: 'success', data: result });
-  } catch (err) {
-    return createJsonResponse({ status: 'error', message: err.toString() });
-  }
-}
-
-function handleGetApi(action, params) {
-  if (action === 'getRapor') {
-    const nis = params.nis || '230101';
-    const semester = params.semester || 2;
-    const data = getRaporDataLengkap(nis, semester);
-    return createJsonResponse(data);
-  }
-  if (action === 'init') {
-    setupDatabaseSheets();
-    return createJsonResponse({ status: 'initialized' });
-  }
-  return createJsonResponse({ status: 'ok', message: 'API E-Rapor Deep Learning Siap' });
-}
-
-function handlePostApi(action, data) {
-  if (action === 'initSheets') {
-    setupDatabaseSheets();
-    return { success: true };
-  }
-  if (action === 'saveCatatanWali') {
-    return updateCatatanWaliDanLeger(data.nis, data.semester, data.catatanCustom, data.statusKenaikan);
-  }
-  return { success: true };
-}
-
-function createJsonResponse(data) {
-  return ContentService.createTextOutput(JSON.stringify(data))
-    .setMimeType(ContentService.MimeType.JSON);
-}
-
-/**
- * 3. LOGIKA BACKEND: KALKULASI NILAI AKHIR (NA)
- */
-function hitungNilaiAkhir(rataFormatif, rataSumatif) {
-  if (rataFormatif > 0 && rataSumatif > 0) {
-    return Math.round((rataFormatif + rataSumatif) / 2);
-  }
-  return Math.round(rataSumatif || rataFormatif || 0);
-}
-
-/**
- * 4. LOGIKA BACKEND: AUTO-DESKRIPSI MAPEL (MAX/MIN TP)
- */
-function generateAutoDeskripsiMapel(nilaiTpArray, tpNarasiArray) {
-  const scoredTps = [];
-
-  for (let i = 0; i < 25; i++) {
-    const val = Number(nilaiTpArray[i]) || 0;
-    const narasi = (tpNarasiArray[i] || 'tujuan pembelajaran ke-' + (i + 1)).trim();
-    if (val > 0) {
-      scoredTps.push({ index: i + 1, nilai: val, narasi: narasi });
-    }
-  }
-
-  if (scoredTps.length === 0) {
-    return 'Menunjukkan pemahaman dasar pada capaian pembelajaran yang dipelajari.';
-  }
-
-  let maxItem = scoredTps[0];
-  let minItem = scoredTps[0];
-
-  for (let i = 1; i < scoredTps.length; i++) {
-    if (scoredTps[i].nilai > maxItem.nilai) maxItem = scoredTps[i];
-    if (scoredTps[i].nilai < minItem.nilai) minItem = scoredTps[i];
-  }
-
-  const teksMax = maxItem.narasi.charAt(0).toLowerCase() + maxItem.narasi.slice(1);
-  const teksMin = minItem.narasi.charAt(0).toLowerCase() + minItem.narasi.slice(1);
-
-  if (maxItem.index === minItem.index || maxItem.nilai === minItem.nilai) {
-    if (maxItem.nilai >= 85) {
-      return 'Menunjukkan penguasaan yang sangat istimewa dan konsisten dalam ' + teksMax + '.';
-    }
-    return 'Menunjukkan pemahaman yang baik dan merata dalam ' + teksMax + '.';
-  }
-
-  const predikatMax = maxItem.nilai >= 85
-    ? 'Menunjukkan penguasaan sangat baik'
-    : 'Menunjukkan pemahaman yang baik';
-
-  const predikatMin = minItem.nilai < 75
-    ? 'namun perlu pendampingan serta penguatan lebih lanjut'
-    : 'serta perlu pemantapan berkelanjutan';
-
-  return predikatMax + ' dalam ' + teksMax + ', ' + predikatMin + ' dalam ' + teksMin + '.';
-}
-
-/**
- * 5. LOGIKA BACKEND: AUTO-DESKRIPSI EKSTRAKURIKULER
- */
-function generateAutoDeskripsiEkstra(namaEkstra, predikat) {
-  const nama = namaEkstra ? namaEkstra.trim() : 'ekstrakurikuler';
-  switch (predikat) {
-    case 'Sangat Baik':
-      return 'Sangat aktif, berdedikasi tinggi, dan menunjukkan penguasaan teknik serta keterampilan yang unggul dalam kegiatan ' + nama + '.';
-    case 'Baik':
-      return 'Aktif mengikuti rangkaian latihan, disiplin, dan terampil dalam menguasai materi kegiatan ' + nama + '.';
-    case 'Cukup':
-      return 'Cukup aktif mengikuti kegiatan ' + nama + ', diharapkan lebih konsisten meningkatkan kehadiran dan latihan mandiri.';
-    case 'Kurang':
-      return 'Perlu motivasi dan bimbingan untuk meningkatkan keaktifan serta komitmen dalam kegiatan ' + nama + '.';
-    default:
-      return 'Aktif berpartisipasi dalam kegiatan ' + nama + '.';
-  }
-}
-
-/**
- * 6. LOGIKA BACKEND: PERINGKAT TERSELUBUNG & CATATAN WALI KELAS HYBRID
- * Peringkat hanya dicatat di backend Sheet Leger_Nilai. Dilarang dimunculkan di cetakan rapor!
- */
-function prosesLegerDanPeringkatTerselubung(semester) {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const sheetLeger = ss.getSheetByName(SHEET_NAMES.LEGER_NILAI);
-  if (!sheetLeger) return [];
-
-  const data = sheetLeger.getDataRange().getValues();
-  if (data.length <= 1) return [];
-
-  const baris = [];
-  for (let i = 1; i < data.length; i++) {
-    const row = data[i];
-    if (Number(row[3]) === Number(semester)) {
-      baris.push({
-        rowIndex: i + 1,
-        nis: String(row[0]),
-        nama: row[1],
-        kelas: row[2],
-        semester: row[3],
-        totalNilai: Number(row[14]) || 0,
-        rataRata: Number(row[15]) || 0,
-        customCatatan: row[18] ? String(row[18]).trim() : '',
-        statusKenaikan: row[20] || ''
-      });
-    }
-  }
-
-  baris.sort(function(a, b) { return b.rataRata - a.rataRata; });
-  const total = baris.length;
-
-  baris.forEach(function(item, idx) {
-    const rank = idx + 1;
-    let persentil = 'Middle 60%';
-    const topCutoff = Math.max(1, Math.ceil(total * 0.10));
-    const bottomCutoff = Math.max(topCutoff + 1, Math.floor(total * 0.70));
-
-    if (rank <= topCutoff) {
-      persentil = 'Top 10%';
-    } else if (rank > bottomCutoff) {
-      persentil = 'Bottom 30%';
-    }
-
-    let catatanFinal = item.customCatatan;
-    if (!catatanFinal || catatanFinal === '') {
-      if (persentil === 'Top 10%') {
-        catatanFinal = 'Pertahankan prestasi gemilang, ketekunan belajar, dan keluhuran budi pekertimu. Tetaplah menjadi pribadi yang rendah hati, gemar berbagi kebaikan kepada sesama, serta terus asah potensi diri untuk meraih cita-cita mulia.';
-      } else if (persentil === 'Middle 60%') {
-        catatanFinal = 'Pencapaian belajar ananda sudah baik dan menunjukkan kemajuan yang membanggakan. Terus tingkatkan kedisiplinan, keberanian dalam bertanya, serta perluas wawasan dengan gemar membaca agar capaian berikutnya semakin unggul.';
-      } else {
-        catatanFinal = 'Tetap bersemangat dan jangan berkecil hati. Setiap tantangan adalah peluang untuk bertumbuh. Tingkatkan fokus saat pembelajaran, rutin mengulang materi di rumah, dan jangan ragu untuk berdiskusi dengan guru maupun teman.';
-      }
-    }
-
-    // Tulis ke Sheet Leger (1-based index)
-    sheetLeger.getRange(item.rowIndex, 17).setValue(rank); // Kolom 17: Peringkat Terselubung
-    sheetLeger.getRange(item.rowIndex, 18).setValue(persentil); // Kolom 18: Persentil Kategori
-    sheetLeger.getRange(item.rowIndex, 20).setValue(catatanFinal); // Kolom 20: Catatan Final
-  });
-
-  return baris;
-}
-
-/**
- * 7. PENGAMBILAN DATA LENGKAP SISWA
- */
-function getRaporDataLengkap(nis, semester) {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-
-  const sheetS = ss.getSheetByName(SHEET_NAMES.DATA_SISWA);
-  const dataS = sheetS.getDataRange().getValues();
-  let siswa = null;
-  for (let i = 1; i < dataS.length; i++) {
-    if (String(dataS[i][0]) === String(nis)) {
-      siswa = {
-        nis: dataS[i][0], nisn: dataS[i][1], nama: dataS[i][2], kelas: dataS[i][3],
-        fase: dataS[i][4], tempatLahir: dataS[i][5], tanggalLahir: dataS[i][6],
-        alamat: dataS[i][9], orangTua: dataS[i][10] + ' / ' + dataS[i][11]
-      };
-      break;
-    }
-  }
-
-  return {
-    siswa: siswa,
-    semester: Number(semester)
-  };
-}
-
-/**
- * 8. ENDPOINT API: doGet(e) - MEMBACA DATA DARI GOOGLE SHEETS
- * URL Web App dapat dipanggil langsung dari antarmuka web melalui fetch().
- * Parameter:
- * - ?action=test -> Tes koneksi
- * - ?action=readAll -> Membaca data siswa, kurikulum, dan nilai
- * - ?action=readSiswa -> Membaca daftar identitas siswa
+ * 2. ENDPOINT API: doGet(e) - MEMBACA SELURUH DATA DARI GOOGLE SHEETS
+ * Mendukung:
+ * - ?action=test -> Uji koneksi Web App
+ * - ?action=readAll -> Membaca Akun Guru, Identitas Sekolah, Siswa, Kurikulum, Nilai, Kokurikuler, Ekstra, Absensi
+ * - ?action=readSiswa -> Membaca daftar siswa saja
  */
 function doGet(e) {
   try {
@@ -550,13 +390,75 @@ function doGet(e) {
       return jsonResponse({
         status: 'success',
         message: 'Koneksi Google Apps Script & Google Sheets Berhasil Terhubung!',
-        sekolah: 'SD KRISTEN KALAM KUDUS BLITAR',
         spreadsheetId: ss.getId(),
         timestamp: new Date().toISOString()
       });
     }
 
-    // Baca Data Siswa
+    if (action === 'init') {
+      setupDatabaseSheets();
+      return jsonResponse({
+        status: 'success',
+        message: 'Inisialisasi sheet berhasil dilakukan.',
+        timestamp: new Date().toISOString()
+      });
+    }
+
+    // 1. Baca Identitas Sekolah
+    let sekolah = null;
+    const sheetSekolah = ss.getSheetByName(SHEET_NAMES.IDENTITAS_SEKOLAH);
+    if (sheetSekolah && sheetSekolah.getLastRow() > 1) {
+      const sekolahValues = sheetSekolah.getDataRange().getValues();
+      const row = sekolahValues[1];
+      if (row[15]) {
+        try {
+          sekolah = JSON.parse(String(row[15]));
+        } catch (errParseSekolah) {
+          sekolah = null;
+        }
+      }
+      if (!sekolah && row[1]) {
+        sekolah = {
+          namaSekolah: String(row[1] || ''),
+          npsn: String(row[2] || ''),
+          tahunPelajaran: String(row[3] || ''),
+          namaKepalaSekolah: String(row[4] || ''),
+          nipKepalaSekolah: String(row[5] || '-'),
+          namaWaliKelas: String(row[6] || ''),
+          nipWaliKelas: String(row[7] || '-'),
+          alamatSekolah: String(row[8] || ''),
+          kelurahan: String(row[9] || ''),
+          kecamatan: String(row[10] || ''),
+          kotaKabupaten: String(row[11] || ''),
+          provinsi: String(row[12] || ''),
+          titimangsaTempat: String(row[13] || ''),
+          titimangsaTanggal: String(row[14] || '')
+        };
+      }
+    }
+
+    // 2. Baca Akun Guru & Password
+    const sheetAkun = ss.getSheetByName(SHEET_NAMES.AKUN_GURU);
+    const akunValues = sheetAkun ? sheetAkun.getDataRange().getValues() : [];
+    const userAccounts = [];
+    for (let i = 1; i < akunValues.length; i++) {
+      const r = akunValues[i];
+      if (r[0] && r[1]) {
+        userAccounts.push({
+          id: String(r[0]),
+          nama: String(r[1]),
+          nip: String(r[2] || '-'),
+          role: String(r[3] || 'wali_kelas'),
+          kelasAjar: r[4] ? String(r[4]) : undefined,
+          kodeMapel: r[5] ? String(r[5]) : undefined,
+          namaMapel: r[6] ? String(r[6]) : undefined,
+          password: String(r[7] || 'guru123'),
+          email: r[8] ? String(r[8]) : ''
+        });
+      }
+    }
+
+    // 3. Baca Data Siswa
     const sheetSiswa = ss.getSheetByName(SHEET_NAMES.DATA_SISWA);
     const dataSiswaValues = sheetSiswa ? sheetSiswa.getDataRange().getValues() : [];
     const siswaList = [];
@@ -585,7 +487,9 @@ function doGet(e) {
           alamatOrtuProvinsi: String(r[18] || ''),
           namaWali: String(r[19] || '-'),
           pekerjaanWali: String(r[20] || '-'),
-          alamatWali: String(r[21] || '-')
+          alamatWali: String(r[21] || '-'),
+          namaPanggilan: r[22] ? String(r[22]) : undefined,
+          telepon: r[23] ? String(r[23]) : undefined
         });
       }
     }
@@ -594,7 +498,7 @@ function doGet(e) {
       return jsonResponse({ status: 'success', data: siswaList });
     }
 
-    // Baca Master Kurikulum
+    // 4. Baca Master Kurikulum
     const sheetKurikulum = ss.getSheetByName(SHEET_NAMES.MASTER_KURIKULUM);
     const kurikulumValues = sheetKurikulum ? sheetKurikulum.getDataRange().getValues() : [];
     const kurikulumList = [];
@@ -605,18 +509,26 @@ function doGet(e) {
         for (let t = 5; t <= 29; t++) {
           tpNarasi.push(String(r[t] || ''));
         }
-        kurikulumList.push({
+        let detailExtra = {};
+        if (r[30]) {
+          try {
+            detailExtra = JSON.parse(String(r[30]));
+          } catch (errKuri) {
+            detailExtra = {};
+          }
+        }
+        kurikulumList.push(Object.assign({
           kodeMapel: String(r[0]),
           namaMapel: String(r[1]),
           kelompok: String(r[2] || 'A'),
           cp: String(r[3] || ''),
           atp: String(r[4] || ''),
           tpNarasi: tpNarasi
-        });
+        }, detailExtra));
       }
     }
 
-    // Baca Nilai Formatif
+    // 5. Baca Nilai Formatif
     const sheetFormatif = ss.getSheetByName(SHEET_NAMES.NILAI_FORMATIF);
     const formatifValues = sheetFormatif ? sheetFormatif.getDataRange().getValues() : [];
     const nilaiFormatifList = [];
@@ -635,7 +547,7 @@ function doGet(e) {
       }
     }
 
-    // Baca Nilai Sumatif
+    // 6. Baca Nilai Sumatif (Index: 0=NIS, 1=Kode, 2..5=LM1..4, 6=Rata_LM, 7=STS, 8=SAS)
     const sheetSumatif = ss.getSheetByName(SHEET_NAMES.NILAI_SUMATIF);
     const sumatifValues = sheetSumatif ? sheetSumatif.getDataRange().getValues() : [];
     const nilaiSumatifList = [];
@@ -646,9 +558,96 @@ function doGet(e) {
           nis: String(r[0]),
           kodeMapel: String(r[1]),
           sumatifLm: [Number(r[2]) || 0, Number(r[3]) || 0, Number(r[4]) || 0, Number(r[5]) || 0],
-          sts: Number(r[6]) || 0,
-          sas: Number(r[7]) || 0
+          sts: Number(r[7]) || 0,
+          sas: Number(r[8]) || 0
         });
+      }
+    }
+
+    // 7. Baca Kokurikuler 8 Dimensi
+    const sheetKoku = ss.getSheetByName(SHEET_NAMES.KOKURIKULER);
+    const kokuValues = sheetKoku ? sheetKoku.getDataRange().getValues() : [];
+    const kokurikulerList = [];
+    for (let i = 1; i < kokuValues.length; i++) {
+      const r = kokuValues[i];
+      if (r[0]) {
+        let dimensiArr = [];
+        if (r[18]) {
+          try {
+            dimensiArr = JSON.parse(String(r[18]));
+          } catch (errKoku) {
+            dimensiArr = [];
+          }
+        }
+        kokurikulerList.push({
+          nis: String(r[0]),
+          semester: Number(r[1]) === 1 ? 1 : 2,
+          dimensi: dimensiArr
+        });
+      }
+    }
+
+    // 8. Baca Ekstrakurikuler
+    const sheetEkstra = ss.getSheetByName(SHEET_NAMES.EKSTRAKURIKULER);
+    const ekstraValues = sheetEkstra ? sheetEkstra.getDataRange().getValues() : [];
+    const ekstrakurikulerList = [];
+    for (let i = 1; i < ekstraValues.length; i++) {
+      const r = ekstraValues[i];
+      if (r[0]) {
+        let daftarEkstra = [];
+        if (r[14]) {
+          try {
+            daftarEkstra = JSON.parse(String(r[14]));
+          } catch (errEkstra) {
+            daftarEkstra = [];
+          }
+        } else {
+          for (let k = 0; k < 4; k++) {
+            const baseIdx = 2 + k * 3;
+            if (r[baseIdx]) {
+              daftarEkstra.push({
+                id: 'eks-' + r[0] + '-' + (k + 1),
+                namaKegiatan: String(r[baseIdx]),
+                predikat: String(r[baseIdx + 1] || 'Baik'),
+                deskripsi: String(r[baseIdx + 2] || '')
+              });
+            }
+          }
+        }
+        ekstrakurikulerList.push({
+          nis: String(r[0]),
+          semester: Number(r[1]) === 1 ? 1 : 2,
+          daftarEkstra: daftarEkstra
+        });
+      }
+    }
+
+    // 9. Baca Absensi, Catatan Custom & Status Kenaikan
+    const sheetAbs = ss.getSheetByName(SHEET_NAMES.ABSENSI_CATATAN);
+    const absValues = sheetAbs ? sheetAbs.getDataRange().getValues() : [];
+    const absensiList = [];
+    const customNotes = {};
+    const statusKenaikanMap = {};
+    for (let i = 1; i < absValues.length; i++) {
+      const r = absValues[i];
+      if (r[0]) {
+        const nisStr = String(r[0]);
+        absensiList.push({
+          nis: nisStr,
+          semester: Number(r[1]) === 1 ? 1 : 2,
+          sakit: Number(r[2]) || 0,
+          izin: Number(r[3]) || 0,
+          tanpaKeterangan: Number(r[4]) || 0
+        });
+        if (r[5] !== undefined && r[5] !== '') {
+          customNotes[nisStr] = String(r[5]);
+        }
+        if (r[6]) {
+          statusKenaikanMap[nisStr] = {
+            status: String(r[6]),
+            targetKelas: String(r[7] || '')
+          };
+        }
       }
     }
 
@@ -656,10 +655,17 @@ function doGet(e) {
       status: 'success',
       timestamp: new Date().toISOString(),
       data: {
+        sekolah: sekolah,
+        userAccounts: userAccounts,
         siswaList: siswaList,
         kurikulum: kurikulumList,
         nilaiFormatif: nilaiFormatifList,
-        nilaiSumatif: nilaiSumatifList
+        nilaiSumatif: nilaiSumatifList,
+        kokurikulerList: kokurikulerList,
+        ekstrakurikulerList: ekstrakurikulerList,
+        absensiList: absensiList,
+        customNotes: customNotes,
+        statusKenaikanMap: statusKenaikanMap
       }
     });
 
@@ -672,8 +678,8 @@ function doGet(e) {
 }
 
 /**
- * 9. ENDPOINT API: doPost(e) - MENYIMPAN DATA E-RAPOR KE GOOGLE SHEETS
- * Menerima payload JSON dari tombol "Simpan ke Google Sheets" pada frontend.
+ * 3. ENDPOINT API: doPost(e) - MENYIMPAN SELURUH DATA E-RAPOR KE GOOGLE SHEETS
+ * Menerima payload JSON dari frontend (Auto-Sync & tombol manual "Simpan ke Google Sheets").
  */
 function doPost(e) {
   try {
@@ -683,8 +689,71 @@ function doPost(e) {
 
     const payload = JSON.parse(e.postData.contents);
     const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const updatedSheets = [];
 
-    // 1. Simpan Data Siswa
+    // 1. Simpan Identitas Sekolah & Penugasan Guru (Wali Kelas 1-6 + Guru Mapel)
+    if (payload.sekolah && payload.sekolah.namaSekolah) {
+      const s = payload.sekolah;
+      const sheetSekolah =
+        ss.getSheetByName(SHEET_NAMES.IDENTITAS_SEKOLAH) ||
+        ss.insertSheet(SHEET_NAMES.IDENTITAS_SEKOLAH);
+      const rows = [
+        [
+          'Key', 'Nama_Sekolah', 'NPSN', 'Tahun_Pelajaran', 'Nama_Kepala_Sekolah', 'NIP_Kepala_Sekolah',
+          'Nama_Wali_Kelas_Default', 'NIP_Wali_Kelas_Default', 'Alamat_Sekolah', 'Kelurahan', 'Kecamatan',
+          'Kota_Kabupaten', 'Provinsi', 'Titimangsa_Tempat', 'Titimangsa_Tanggal', 'Profil_Lengkap_JSON'
+        ],
+        [
+          'PROFIL_UTAMA',
+          String(s.namaSekolah || ''),
+          String(s.npsn || ''),
+          String(s.tahunPelajaran || ''),
+          String(s.namaKepalaSekolah || ''),
+          String(s.nipKepalaSekolah || '-'),
+          String(s.namaWaliKelas || ''),
+          String(s.nipWaliKelas || '-'),
+          String(s.alamatSekolah || ''),
+          String(s.kelurahan || ''),
+          String(s.kecamatan || ''),
+          String(s.kotaKabupaten || ''),
+          String(s.provinsi || ''),
+          String(s.titimangsaTempat || ''),
+          String(s.titimangsaTanggal || ''),
+          JSON.stringify(s)
+        ]
+      ];
+      sheetSekolah.clearContents();
+      sheetSekolah.getRange(1, 1, rows.length, rows[0].length).setValues(rows);
+      updatedSheets.push(SHEET_NAMES.IDENTITAS_SEKOLAH);
+    }
+
+    // 2. Simpan Akun Guru & Password
+    if (payload.userAccounts && Array.isArray(payload.userAccounts) && payload.userAccounts.length > 0) {
+      const sheetAkun =
+        ss.getSheetByName(SHEET_NAMES.AKUN_GURU) ||
+        ss.insertSheet(SHEET_NAMES.AKUN_GURU);
+      const rows = [
+        ['ID_Akun', 'Nama_Guru', 'NIP', 'Peran_Role', 'Kelas_Ajar', 'Kode_Mapel', 'Nama_Mapel', 'Password', 'Email']
+      ];
+      payload.userAccounts.forEach(function(u) {
+        rows.push([
+          String(u.id || ''),
+          String(u.nama || ''),
+          String(u.nip || '-'),
+          String(u.role || 'wali_kelas'),
+          String(u.kelasAjar || ''),
+          String(u.kodeMapel || ''),
+          String(u.namaMapel || ''),
+          String(u.password || 'guru123'),
+          String(u.email || '')
+        ]);
+      });
+      sheetAkun.clearContents();
+      sheetAkun.getRange(1, 1, rows.length, rows[0].length).setValues(rows);
+      updatedSheets.push(SHEET_NAMES.AKUN_GURU);
+    }
+
+    // 3. Simpan Data Siswa
     if (payload.siswaList && Array.isArray(payload.siswaList) && payload.siswaList.length > 0) {
       const sheetSiswa = ss.getSheetByName(SHEET_NAMES.DATA_SISWA) || ss.insertSheet(SHEET_NAMES.DATA_SISWA);
       const rows = [
@@ -692,7 +761,7 @@ function doPost(e) {
           'NIS', 'NISN', 'Nama_Siswa', 'Kelas', 'Fase', 'Tempat_Lahir', 'Tanggal_Lahir',
           'Jenis_Kelamin', 'Agama', 'Alamat_Siswa', 'Nama_Ayah', 'Nama_Ibu', 'Pekerjaan_Ayah', 'Pekerjaan_Ibu',
           'Alamat_Ortu_Jalan', 'Alamat_Ortu_Desa', 'Alamat_Ortu_Kecamatan', 'Alamat_Ortu_Kota', 'Alamat_Ortu_Provinsi',
-          'Nama_Wali', 'Pekerjaan_Wali', 'Alamat_Wali'
+          'Nama_Wali', 'Pekerjaan_Wali', 'Alamat_Wali', 'Nama_Panggilan', 'Telepon'
         ]
       ];
 
@@ -702,15 +771,62 @@ function doPost(e) {
           String(s.tempatLahir || ''), String(s.tanggalLahir || ''), String(s.jenisKelamin || 'L'), String(s.agama || 'Kristen Protestan'),
           String(s.alamat || ''), String(s.namaAyah || ''), String(s.namaIbu || ''), String(s.pekerjaanAyah || ''), String(s.pekerjaanIbu || ''),
           String(s.alamatOrtuJalan || ''), String(s.alamatOrtuKelurahan || ''), String(s.alamatOrtuKecamatan || ''), String(s.alamatOrtuKota || ''),
-          String(s.alamatOrtuProvinsi || ''), String(s.namaWali || '-'), String(s.pekerjaanWali || '-'), String(s.alamatWali || '-')
+          String(s.alamatOrtuProvinsi || ''), String(s.namaWali || '-'), String(s.pekerjaanWali || '-'), String(s.alamatWali || '-'),
+          String(s.namaPanggilan || ''), String(s.telepon || '')
         ]);
       });
 
       sheetSiswa.clearContents();
       sheetSiswa.getRange(1, 1, rows.length, rows[0].length).setValues(rows);
+      updatedSheets.push(SHEET_NAMES.DATA_SISWA);
     }
 
-    // 2. Simpan Nilai Formatif
+    // 4. Simpan Master Kurikulum (termasuk Fase A/B/C JSON)
+    if (payload.kurikulum && Array.isArray(payload.kurikulum) && payload.kurikulum.length > 0) {
+      const sheetKuri =
+        ss.getSheetByName(SHEET_NAMES.MASTER_KURIKULUM) ||
+        ss.insertSheet(SHEET_NAMES.MASTER_KURIKULUM);
+      const header = [
+        'Kode_Mapel', 'Nama_Mapel', 'Kelompok', 'Capaian_Pembelajaran_CP', 'Alur_Tujuan_Pembelajaran_ATP'
+      ];
+      for (let i = 1; i <= 25; i++) header.push('TP_' + i);
+      header.push('Detail_Fase_JSON');
+      const rows = [header];
+
+      payload.kurikulum.forEach(function(k) {
+        const row = [
+          String(k.kodeMapel || ''),
+          String(k.namaMapel || ''),
+          String(k.kelompok || 'A'),
+          String(k.cp || ''),
+          String(k.atp || '')
+        ];
+        const tps = Array.isArray(k.tpNarasi) ? k.tpNarasi : [];
+        for (let i = 0; i < 25; i++) {
+          row.push(String(tps[i] || ''));
+        }
+        row.push(JSON.stringify({
+          cpFaseA: k.cpFaseA,
+          cpFaseB: k.cpFaseB,
+          cpFaseC: k.cpFaseC,
+          atpFaseA: k.atpFaseA,
+          atpFaseB: k.atpFaseB,
+          atpFaseC: k.atpFaseC,
+          tpNarasiFaseA: k.tpNarasiFaseA,
+          tpNarasiFaseB: k.tpNarasiFaseB,
+          tpNarasiFaseC: k.tpNarasiFaseC,
+          elemenCapaian: k.elemenCapaian,
+          fileAtpLampiran: k.fileAtpLampiran
+        }));
+        rows.push(row);
+      });
+
+      sheetKuri.clearContents();
+      sheetKuri.getRange(1, 1, rows.length, rows[0].length).setValues(rows);
+      updatedSheets.push(SHEET_NAMES.MASTER_KURIKULUM);
+    }
+
+    // 5. Simpan Nilai Formatif
     if (payload.nilaiFormatif && Array.isArray(payload.nilaiFormatif) && payload.nilaiFormatif.length > 0) {
       const sheetFormatif = ss.getSheetByName(SHEET_NAMES.NILAI_FORMATIF) || ss.insertSheet(SHEET_NAMES.NILAI_FORMATIF);
       const rows = [];
@@ -738,9 +854,10 @@ function doPost(e) {
 
       sheetFormatif.clearContents();
       sheetFormatif.getRange(1, 1, rows.length, rows[0].length).setValues(rows);
+      updatedSheets.push(SHEET_NAMES.NILAI_FORMATIF);
     }
 
-    // 3. Simpan Nilai Sumatif
+    // 6. Simpan Nilai Sumatif
     if (payload.nilaiSumatif && Array.isArray(payload.nilaiSumatif) && payload.nilaiSumatif.length > 0) {
       const sheetSumatif = ss.getSheetByName(SHEET_NAMES.NILAI_SUMATIF) || ss.insertSheet(SHEET_NAMES.NILAI_SUMATIF);
       const rows = [
@@ -777,17 +894,110 @@ function doPost(e) {
 
       sheetSumatif.clearContents();
       sheetSumatif.getRange(1, 1, rows.length, rows[0].length).setValues(rows);
+      updatedSheets.push(SHEET_NAMES.NILAI_SUMATIF);
     }
 
-    // 4. Update Leger Nilai & Peringkat Terselubung
-    const sem = payload.semester ? Number(payload.semester) : 2;
-    prosesLegerDanPeringkatTerselubung(sem);
+    // 7. Simpan Kokurikuler 8 Dimensi
+    if (payload.kokurikulerList && Array.isArray(payload.kokurikulerList) && payload.kokurikulerList.length > 0) {
+      const sheetKoku =
+        ss.getSheetByName(SHEET_NAMES.KOKURIKULER) ||
+        ss.insertSheet(SHEET_NAMES.KOKURIKULER);
+      const rows = [
+        [
+          'NIS', 'Semester',
+          'Dimensi_1_Predikat', 'Dimensi_1_Catatan',
+          'Dimensi_2_Predikat', 'Dimensi_2_Catatan',
+          'Dimensi_3_Predikat', 'Dimensi_3_Catatan',
+          'Dimensi_4_Predikat', 'Dimensi_4_Catatan',
+          'Dimensi_5_Predikat', 'Dimensi_5_Catatan',
+          'Dimensi_6_Predikat', 'Dimensi_6_Catatan',
+          'Dimensi_7_Predikat', 'Dimensi_7_Catatan',
+          'Dimensi_8_Predikat', 'Dimensi_8_Catatan',
+          'Dimensi_Lengkap_JSON'
+        ]
+      ];
+      payload.kokurikulerList.forEach(function(k) {
+        const dims = Array.isArray(k.dimensi) ? k.dimensi : [];
+        const row = [String(k.nis), Number(k.semester || payload.semester || 2)];
+        for (let d = 1; d <= 8; d++) {
+          const found = dims.find(function(item) { return item.kode === 'D' + d; });
+          row.push(found ? String(found.predikat || '') : '');
+          row.push(found ? String(found.catatanPerkembangan || '') : '');
+        }
+        row.push(JSON.stringify(dims));
+        rows.push(row);
+      });
+      sheetKoku.clearContents();
+      sheetKoku.getRange(1, 1, rows.length, rows[0].length).setValues(rows);
+      updatedSheets.push(SHEET_NAMES.KOKURIKULER);
+    }
+
+    // 8. Simpan Ekstrakurikuler
+    if (payload.ekstrakurikulerList && Array.isArray(payload.ekstrakurikulerList) && payload.ekstrakurikulerList.length > 0) {
+      const sheetEkstra =
+        ss.getSheetByName(SHEET_NAMES.EKSTRAKURIKULER) ||
+        ss.insertSheet(SHEET_NAMES.EKSTRAKURIKULER);
+      const rows = [
+        [
+          'NIS', 'Semester',
+          'Ekstra_1_Nama', 'Ekstra_1_Predikat', 'Ekstra_1_Deskripsi',
+          'Ekstra_2_Nama', 'Ekstra_2_Predikat', 'Ekstra_2_Deskripsi',
+          'Ekstra_3_Nama', 'Ekstra_3_Predikat', 'Ekstra_3_Deskripsi',
+          'Ekstra_4_Nama', 'Ekstra_4_Predikat', 'Ekstra_4_Deskripsi',
+          'Daftar_Ekstra_JSON'
+        ]
+      ];
+      payload.ekstrakurikulerList.forEach(function(eItem) {
+        const list = Array.isArray(eItem.daftarEkstra) ? eItem.daftarEkstra : [];
+        const row = [String(eItem.nis), Number(eItem.semester || payload.semester || 2)];
+        for (let idx = 0; idx < 4; idx++) {
+          const eks = list[idx];
+          row.push(eks ? String(eks.namaKegiatan || '') : '');
+          row.push(eks ? String(eks.predikat || '') : '');
+          row.push(eks ? String(eks.deskripsi || '') : '');
+        }
+        row.push(JSON.stringify(list));
+        rows.push(row);
+      });
+      sheetEkstra.clearContents();
+      sheetEkstra.getRange(1, 1, rows.length, rows[0].length).setValues(rows);
+      updatedSheets.push(SHEET_NAMES.EKSTRAKURIKULER);
+    }
+
+    // 9. Simpan Absensi, Catatan Wali Kelas Custom & Status Kenaikan
+    if (payload.absensiList && Array.isArray(payload.absensiList) && payload.absensiList.length > 0) {
+      const sheetAbs =
+        ss.getSheetByName(SHEET_NAMES.ABSENSI_CATATAN) ||
+        ss.insertSheet(SHEET_NAMES.ABSENSI_CATATAN);
+      const customNotes = payload.customNotes || {};
+      const statusMap = payload.statusKenaikanMap || {};
+      const rows = [
+        ['NIS', 'Semester', 'Sakit', 'Izin', 'Tanpa_Keterangan', 'Catatan_Wali_Kelas_Custom', 'Status_Kenaikan', 'Target_Kelas']
+      ];
+      payload.absensiList.forEach(function(a) {
+        const nisStr = String(a.nis);
+        const st = statusMap[nisStr] || {};
+        rows.push([
+          nisStr,
+          Number(a.semester || payload.semester || 2),
+          Number(a.sakit || 0),
+          Number(a.izin || 0),
+          Number(a.tanpaKeterangan || 0),
+          String(customNotes[nisStr] || ''),
+          String(st.status || ''),
+          String(st.targetKelas || '')
+        ]);
+      });
+      sheetAbs.clearContents();
+      sheetAbs.getRange(1, 1, rows.length, rows[0].length).setValues(rows);
+      updatedSheets.push(SHEET_NAMES.ABSENSI_CATATAN);
+    }
 
     return jsonResponse({
       status: 'success',
       message: 'Seluruh data E-Rapor berhasil disinkronkan dan disimpan ke Google Sheets!',
       timestamp: new Date().toISOString(),
-      updatedSheets: ['Data_Siswa', 'Nilai_Formatif', 'Nilai_Sumatif', 'Leger_Nilai']
+      updatedSheets: updatedSheets
     });
 
   } catch (err) {
@@ -799,7 +1009,7 @@ function doPost(e) {
 }
 
 /**
- * HELPER: Mengembalikan JSON Response dengan header CORS yang benar
+ * HELPER: Mengembalikan JSON Response
  */
 function jsonResponse(data) {
   return ContentService.createTextOutput(JSON.stringify(data))
